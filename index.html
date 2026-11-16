@@ -1642,20 +1642,6 @@
   <!-- ===================================================================== -->
   <script>
     // 1. Crash-proof storage wrapper (works in sandboxed iframes & Android WebViews)
-    const SafeStore = {
-      mem: {},
-      get(k) {
-        try { return localStorage.getItem(k) || this.mem[k] || null; }
-        catch (e) { return this.mem[k] || null; }
-      },
-      set(k, v) {
-        this.mem[k] = v;
-        try { localStorage.setItem(k, v); } catch (e) {}
-      }
-    };
-
-    const CAT_KEY = 'GEOCHAIN_CATEGORIES_EXACT_V7';
-    let categoryMap = {};
     try {
       categoryMap = JSON.parse(
         SafeStore.get(CAT_KEY) ||
@@ -1747,30 +1733,14 @@
       return list;
     }
 
-    let allStations = [];
-    let currentOrigin = {
-      lat: 17.545200,
-      lng: 78.370500,
-      label: 'Bachupally (Black Diamond / Gothic Pentagon)',
-      mode: 'custom',
-      accuracy: null
-    };
+    
     let activeTab = 'setup';
-    let rangeKm = 5;
-    let tapMapMode = false;
-    let useOsrmRoadRouting = true;
-    let activeTileKey = 'google_road';
-    let activeCatModalFilter = 'all';
-
+    
     // Table Pagination & Filter State for "Station Data & Distance Preview"
     let tablePage = 1;
     let tablePageSize = 50;
 
-    let map, tileLayers = {}, currentTileLayer = null;
-    let markersLayerGroup, routeLayerGroup, radiusCircle, originMarker, gpsAccuracyCircle;
-    let activeNearby = [], chainedStops = [];
-    let osrmRequestCounter = 0;
-
+    
     function escapeHtml(str) {
       return String(str ?? '')
         .replace(/&/g, '&amp;')
