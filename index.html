@@ -1,0 +1,3431 @@
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>GeoChain EV & Maps v7 — GitHub Pages & Android Edition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #0b1120;
+      color: #f8fafc;
+      margin: 0;
+      overflow-x: hidden;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.55); border-radius: 9999px; }
+
+    .custom-pin { background: transparent !important; border: none !important; }
+    .leaflet-popup-content-wrapper {
+      background: #0f172a !important;
+      color: #f8fafc !important;
+      border-radius: 14px !important;
+      border: 1px solid #334155 !important;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.65) !important;
+    }
+    .leaflet-popup-tip { background: #0f172a !important; }
+    .leaflet-popup-content { margin: 10px 12px !important; }
+
+    /* Pulsing Google-Maps Style Blue Origin Dot */
+    .gm-user-dot {
+      position: relative;
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .gm-user-core {
+      width: 16px;
+      height: 16px;
+      border-radius: 9999px;
+      background: #1a73e8;
+      border: 3px solid #ffffff;
+      box-shadow: 0 0 10px rgba(26, 115, 232, 0.95);
+      z-index: 2;
+    }
+    .gm-user-halo {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      background: rgba(26, 115, 232, 0.28);
+      border: 1.5px solid rgba(96, 165, 250, 0.75);
+      animation: gmPulse 2s infinite ease-out;
+      z-index: 1;
+    }
+    @keyframes gmPulse {
+      0% { transform: scale(0.65); opacity: 1; }
+      100% { transform: scale(1.9); opacity: 0; }
+    }
+
+    /* Route Leg Pill on Map */
+    .road-leg-pill {
+      background: rgba(15, 23, 42, 0.92);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.6);
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+
+  <!-- ===================================================================== -->
+  <!-- TOP HEADER: GOOGLE MAP LAYER SWITCHER, ROUTING ENGINE & LOCATION BAR  -->
+  <!-- ===================================================================== -->
+  <header class="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3 py-2.5 sticky top-0 z-[1000] shadow-lg">
+    <div class="max-w-7xl mx-auto flex flex-col gap-2">
+
+      <!-- Row 1: App Branding + Map Source Selector + Route Mode + Categories -->
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-blue-600 to-emerald-500 text-white font-extrabold text-xs shadow">
+            <span>🗺️ GeoChain Maps v5</span>
+          </div>
+          <span id="gps-badge" class="text-xs px-2.5 py-1 rounded-lg bg-slate-950 text-emerald-300 border border-slate-700 font-medium">
+            📍 Origin: 17.545200, 78.370500 (Bachupally - Black Diamond)
+          </span>
+          <span id="route-engine-badge" class="text-[11px] px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-500/30 font-semibold">
+            🛣️ Live Road Route Ready
+          </span>
+        </div>
+
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <!-- 4-Source Map Tile Selector (Default: Google Road Map) -->
+          <div class="flex items-center bg-slate-950 border border-slate-700 rounded-lg p-0.5 text-[11px]">
+            <button onclick="setMapTileSource('google_road')" id="tile-google_road" class="px-2 py-1 rounded-md bg-blue-600 text-white font-bold transition-all" title="Google Maps Updated Roads, Colonies & Labels">
+              🗺️ Google Road
+            </button>
+            <button onclick="setMapTileSource('google_hybrid')" id="tile-google_hybrid" class="px-2 py-1 rounded-md text-slate-300 hover:text-white transition-all" title="Google Satellite + Updated Road Labels">
+              🛰️ Google Hybrid
+            </button>
+            <button onclick="setMapTileSource('google_terrain')" id="tile-google_terrain" class="px-2 py-1 rounded-md text-slate-300 hover:text-white transition-all" title="Google Terrain & Relief Roads">
+              ⛰️ Terrain
+            </button>
+            <button onclick="setMapTileSource('carto_voyager')" id="tile-carto_voyager" class="px-2 py-1 rounded-md text-slate-300 hover:text-white transition-all" title="CartoDB Voyager HD / OpenStreetMap Fallback">
+              🌐 Voyager HD
+            </button>
+          </div>
+
+          <!-- Routing Geometry Mode Toggle (OSRM Live Road vs Straight-Line) -->
+          <button onclick="toggleRoutingGeometryMode()" id="btn-route-mode" class="px-2.5 py-1 rounded-lg bg-blue-600/25 hover:bg-blue-600/35 text-blue-300 border border-blue-500/40 text-xs font-bold transition-all" title="Switch between OSRM Turn-by-Turn Road Geometry and Straight-Line Air Chain">
+            🛣️ Mode: Road Route (OSRM)
+          </button>
+
+          <!-- Auto-Detect GPS -->
+          <button onclick="requestExactGPS()" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow transition-all">
+            🎯 Auto GPS
+          </button>
+
+          <!-- 1-Tap Map Pin Drop -->
+          <button onclick="toggleTapMapMode()" id="btn-tap-map" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all">
+            📌 Tap Map to Set Origin
+          </button>
+
+          <!-- Maintained Exclusion Lists (New / Yet to Open & Blacklist) -->
+          <button onclick="openCategoryModal('all')" class="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all">
+            🚧 New (<span id="cnt-new">0</span>) | 🚫 Blacklist (<span id="cnt-black">0</span>)
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 2: Universal Location Search / Coordinate / Google Maps Link Bar + Presets -->
+      <div class="flex flex-wrap items-center gap-1.5">
+        <div class="flex-1 min-w-[250px] flex gap-1">
+          <input id="loc-input" type="text"
+            placeholder="Search any Colony/Place, paste Google Maps link, or enter 'Lat, Long' (e.g. 17.5452, 78.3705)..."
+            class="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500"
+            onkeydown="if(event.key==='Enter') applyLocationInput()" />
+          <button onclick="applyLocationInput()" class="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shrink-0">
+            Set Origin
+          </button>
+        </div>
+
+        <div class="flex items-center gap-1 overflow-x-auto py-0.5 text-[11px]">
+          <span class="text-slate-400 font-semibold">Hubs:</span>
+          <button onclick="setExactOrigin(17.545200, 78.370500, 'Bachupally (Black Diamond / Gothic Pentagon)')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-semibold shrink-0">Bachupally (Black Diamond)</button>
+          <button onclick="setExactOrigin(17.551000, 78.385000, 'Bachupally X Roads / Jayas Platinum')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0">Bachupally (Jayas Platinum)</button>
+          <button onclick="setExactOrigin(17.469475, 78.407257, 'Rainbow Vista, Moosapet')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0">Rainbow Vista</button>
+          <button onclick="setExactOrigin(17.496000, 78.361000, 'Miyapur / Nizampet')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0">Miyapur</button>
+          <button onclick="setExactOrigin(17.442090, 78.381739, 'HITEC City / Mindspace')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0">HITEC City</button>
+          <button onclick="setExactOrigin(17.038880, 82.182800, 'Kakinada / Samalkot')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0">Kakinada</button>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- MAIN WORKSPACE: LEFT STATION/EXCEL PANEL + RIGHT GOOGLE-TILES MAP     -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 grid grid-cols-1 lg:grid-cols-12 gap-3">
+
+    <!-- LEFT PANEL: EXCEL UPLOADER, RANGE CONTROLS & NEARBY/CHAINED STOP CARDS -->
+    <section class="lg:col-span-5 flex flex-col gap-2.5 bg-slate-900 border border-slate-800 rounded-xl p-3 max-h-[85vh] overflow-hidden">
+
+      <!-- Excel Upload Bar -->
+      <div class="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
+        <div class="min-w-0">
+          <h2 class="text-xs sm:text-sm font-bold text-white truncate">
+            📊 1. Sheet: <span id="lbl-file" class="text-cyan-300">ChargePoint List 24.7 (Verified Seed)</span>
+          </h2>
+          <p id="lbl-stats" class="text-[11px] text-slate-400">
+            Upload full <code class="text-emerald-300">DOC-20261107-WA0060.xls</code> for all 14,399 rows
+          </p>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <label class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer shadow">
+            📂 Upload .xls / .xlsx
+            <input type="file" accept=".xls,.xlsx,.csv" class="hidden" onchange="handleExcelUpload(event)" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Range Filter (5 km default, 10 km, 15 km, Custom) & Range Mode -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-xs">
+        <div>
+          <label class="text-slate-400 block mb-1 font-semibold">Range Filter (km)</label>
+          <div class="flex gap-1">
+            <button onclick="setRangeKm(5)" id="rng-5" class="flex-1 py-1 rounded bg-emerald-600 text-white font-bold">5 km</button>
+            <button onclick="setRangeKm(10)" id="rng-10" class="flex-1 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">10 km</button>
+            <button onclick="setRangeKm(15)" id="rng-15" class="flex-1 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">15 km</button>
+            <input id="rng-custom" type="number" step="0.5" min="1" max="500" value="5" onchange="setRangeKm(this.value)"
+              class="w-14 px-1.5 py-1 rounded bg-slate-900 border border-slate-700 text-center text-cyan-300 font-bold" />
+          </div>
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1 font-semibold">Range Rule</label>
+          <select id="range-mode" onchange="recomputeAll(false)" class="w-full px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-white text-xs">
+            <option value="radius">All Points ≤ Range Radius</option>
+            <option value="chain_cap">Last Chained Stop ≤ Range km</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Quick Filter & Search inside Active Range -->
+      <div class="flex items-center gap-1.5">
+        <input id="station-search" type="text" oninput="renderStationList()"
+          placeholder="Filter stations by Name, ID, City, or Power (DC/AC)..."
+          class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500" />
+        <select id="power-filter" onchange="recomputeAll(false)" class="px-2 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-emerald-300 font-semibold">
+          <option value="ALL">All Chargers</option>
+          <option value="DC">⚡ DC Fast</option>
+          <option value="AC">🔌 AC Only</option>
+        </select>
+      </div>
+
+      <!-- Station List (Displays both Air Distance & Live Road Distance + ETA) -->
+      <div class="flex-1 overflow-y-auto space-y-1.5 pr-1" id="station-list"></div>
+    </section>
+
+    <!-- RIGHT PANEL: GOOGLE MAPS TILE CANVAS & BOTTOM CHAIN CONTROLS -->
+    <section class="lg:col-span-7 flex flex-col gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2.5 min-h-[560px] relative">
+
+      <!-- Map Canvas -->
+      <div id="map" class="w-full flex-1 rounded-lg border border-slate-800 min-h-[440px] z-10"></div>
+
+      <!-- Floating Map Legend & Fit Buttons -->
+      <div class="absolute top-5 right-5 z-[500] flex flex-col gap-1.5">
+        <button onclick="fitMapToActiveBounds()" title="Fit Map to Active Range & Route" class="px-2.5 py-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-white border border-slate-700 text-xs font-bold shadow-lg">
+          ⛶ Fit Route
+        </button>
+        <button onclick="map.flyTo([currentOrigin.lat, currentOrigin.lng], 16)" title="Zoom to Origin Street Level" class="px-2.5 py-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-blue-300 border border-slate-700 text-xs font-bold shadow-lg">
+          🎯 Origin
+        </button>
+      </div>
+
+      <!-- BOTTOM CHAIN & GOOGLE MAPS EXPORT DOCK -->
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-3 flex-wrap">
+            <label class="flex items-center gap-2 cursor-pointer bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+              <input type="checkbox" id="chk-chain" checked onchange="recomputeAll(false)" class="w-4 h-4 accent-emerald-500" />
+              <span class="text-xs font-extrabold text-emerald-400">🔗 Chain Nearest-to-Nearest</span>
+            </label>
+
+            <button onclick="requestExactGPS()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-cyan-300 border border-slate-700">
+              🔄 Refresh GPS &amp; Chain
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="copyChainUrl()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold border border-cyan-500/30">
+              📋 Copy URL
+            </button>
+            <button onclick="openChainInGoogleMaps()" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-extrabold shadow-md">
+              🗺️ Open in Google Maps
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Distance & Road Route Summary Strip -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80 text-xs">
+          <span id="chain-summary" class="text-slate-300 font-medium">Calculating chain...</span>
+          <span id="road-summary" class="text-blue-300 font-bold"></span>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 1: MAINTAINED EXCLUSION CATEGORIES (NEW / YET TO OPEN & BLACKLIST) -->
+  <!-- ===================================================================== -->
+  <div id="cat-modal" class="fixed inset-0 bg-black/75 z-[2000] hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-4 max-h-[84vh] flex flex-col gap-3 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <div>
+          <h3 class="text-sm font-bold text-white">🛡️ Maintained Exclusion Lists (🚧 New / Yet to Open &amp; 🚫 Blacklist)</h3>
+          <p class="text-[11px] text-slate-400">Stations in these lists stay hidden across reloads until you click Restore.</p>
+        </div>
+        <button onclick="closeCategoryModal()" class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs font-bold">✕ Close</button>
+      </div>
+
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex gap-1.5 text-xs">
+          <button onclick="renderCategoryModal('all')" id="cat-tab-all" class="px-3 py-1 rounded-lg bg-blue-600 text-white font-bold">All Hidden</button>
+          <button onclick="renderCategoryModal('new')" id="cat-tab-new" class="px-3 py-1 rounded-lg bg-slate-800 text-amber-300 font-semibold">🚧 New / Yet to Open</button>
+          <button onclick="renderCategoryModal('blacklist')" id="cat-tab-blacklist" class="px-3 py-1 rounded-lg bg-slate-800 text-rose-300 font-semibold">🚫 Blacklist</button>
+        </div>
+        <button onclick="restoreAllCategories()" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold">
+          ♻️ Restore All
+        </button>
+      </div>
+
+      <div id="cat-modal-list" class="flex-1 overflow-y-auto space-y-2 text-xs pr-1"></div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 2: COPIED URL DIALOG (NO NATIVE ALERT BLOCKING)                 -->
+  <!-- ===================================================================== -->
+  <div id="url-modal" class="fixed inset-0 bg-black/75 z-[2000] hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-4 flex flex-col gap-3 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <h3 class="text-sm font-bold text-emerald-400">✅ Multi-Stop Google Maps Route URL Copied!</h3>
+        <button onclick="closeUrlModal()" class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white text-xs font-bold">✕</button>
+      </div>
+      <p id="url-modal-info" class="text-xs text-slate-300"></p>
+      <textarea id="url-modal-textarea" readonly rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-mono text-[11px] text-cyan-300 select-all focus:outline-none"></textarea>
+      <div class="flex justify-end gap-2">
+        <button onclick="closeUrlModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-xs font-semibold">Done</button>
+        <a id="url-modal-open-btn" href="#" target="_blank" rel="noopener noreferrer" class="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold">
+          🚀 Open in Google Maps
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- NON-BLOCKING TOAST NOTIFICATION -->
+  <div id="toast-box" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[3000] pointer-events-none opacity-0 transition-opacity duration-300">
+    <div id="toast-text" class="px-4 py-2 rounded-xl bg-slate-900/95 border border-cyan-500/40 text-white text-xs font-bold shadow-2xl"></div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- APPLICATION LOGIC                                                     -->
+  <!-- ===================================================================== -->
+  <script>
+    // 1. Crash-proof storage wrapper (works in sandboxed iframes & Android WebViews)
+    const SafeStore = {
+      mem: {},
+      get(k) {
+        try { return localStorage.getItem(k) || this.mem[k] || null; }
+        catch (e) { return this.mem[k] || null; }
+      },
+      set(k, v) {
+        this.mem[k] = v;
+        try { localStorage.setItem(k, v); } catch (e) {}
+      }
+    };
+
+    const CAT_KEY = 'GEOCHAIN_CATEGORIES_EXACT_V5';
+    let categoryMap = {};
+    try {
+      categoryMap = JSON.parse(SafeStore.get(CAT_KEY) || '{}');
+    } catch (e) {
+      categoryMap = {};
+    }
+
+    // 2. Verified Exact Seed Stations from DOC-20261107-WA0060.xls (Bachupally, Rainbow Vista, Miyapur, HITEC City, Kakinada)
+    const SEED_STATIONS = [
+      ["1742364873107","GOTHIC PENTAGON CLOUDS EVCS | HYDERABAD","Hyderabad","PLOT NO 49/PART, BLACK DIAMOND ENCLAVE, BACHUPALLY","AC_3_PHASE",22,1,17.545200,78.370500],
+      ["9673","UMA FILLING STATION","Secundrabad","INDIAN OIL DEALER, BACHUPALLY(V), SY NO.343","DC",60,2,17.530020,78.355480],
+      ["6377","VAISHNO DEVI F/STATION BACHUPALLY","MEDCHAL MALKAJGIRI","S.NO.343/A AND 346/A BACHUPALLY","DC",30,2,17.528090,78.355150],
+      ["8730","GARUDA FILLING STATION","MEDCHAL MALKAJGIRI","INDIAN OIL PETROL PUMP Sy.No.24-27 Miyapur","DC",30,4,17.507749,78.370925],
+      ["8629","Superintendent Special Home for Boy","MEDCHAL MALKAJGIRI","INDIAN OIL PETROL PUMP Sy.No.342 Gajularamaram","DC",30,4,17.541387,78.396988],
+      ["9671","MADHHAVI KIRANS FUELS FC","Secundrabad","INDIAN OIL DEALER SY NO. 433, BOWRAMPET","DC",60,2,17.545920,78.402760],
+      ["8837","Sri Anjaneya Filling Station","MEDCHAL MALKAJGIRI","INDIAN OIL PETROL PUMP SY No.830 Bowrampet","DC",30,4,17.561061,78.396156],
+      ["9662","GANDI MAISAMMA FILLING STATION","Secundrabad","SY.NO 62/1/A, QUTUBULLAPUR, Medchal","DC",60,2,17.573280,78.424247],
+      ["1773392494011","chargeMOD | Mallareddy Health City EVCS | Suraram","Hyderabad","Venkatarama Colony, Suraram","AC_3_PHASE/DC",60,2,17.546520,78.433606],
+      ["946","Sri Sai Filling Station","MEDCHAL MALKAJGIRI","SY NO. 127/PART DOMMARAPOCHAMPALLY","AC_3_PHASE",7.4,1,17.593634,78.405780],
+      ["5825","GANESH SERVICE STN KUKATPALLY","Hyderabad","SURVEY NO.145 KUKATPALLY","DC",30,2,17.498322,78.388826],
+      ["4844","Sri Ganesh SS- Jeedimetla","Hyderabad","Indian Oil Dealer, Jeedimetla","DC",30,2,17.527090,78.439230],
+      ["4823","Pms Filling Station","RANGAREDDI","S.NO.41 MIYAPUR, SERILINGAMPALLI","DC",30,2,17.497019,78.362566],
+      ["923","Vayuputra Filling Station","MEDCHAL MALKAJGIRI","SY N0. 253/AA/E Kandlakoya Medchal","AC_3_PHASE/DC",30,3,17.597187,78.347397],
+      ["9660","LAKSHMI GANESH FILLING STATION","Secundrabad","SY NO.275-277, SHAPURNAGAR","DC",60,2,17.517161,78.446409],
+      ["4116","AP STATE CIVIL SUPPLIES","RANGAREDDI","SY NO. 98/1 HAFEEZPET VILLAGE","DC",30,2,17.489220,78.353810],
+      ["9675","SAI SIRI AUTO CARE","Secundrabad","SY NO.171, DOOLAPALLY","DC",60,2,17.548361,78.462360],
+      ["1200","My Home Jewel Charging Station","Hyderabad","SY No 83 and 97, My Home Jewel Madinaguda","AC_1_PHASE",7.5,4,17.492572,78.336039],
+      ["ON0IXA","ThunderPlus EV Charge Hub, Hi-tec city, Hyderabad","Hyderabad","Hitech City MMTS Shuttle Bus Parking","AC_1_PHASE/DC",240,10,17.470810,78.384440],
+      ["1235","Rainbow Vista Charging Station","Hyderabad","Rainbow Vista, Moosapet","AC_1_PHASE",7.4,10,17.469475,78.407257],
+      ["16","RKS Auto","Hyderabad","Kmg Navayuga Complex, Chintal, Quthbullapur","DC",60,2,17.489265,78.449793],
+      ["2372","CRVRGROWA-EV CHARGING STATION - 2","Hyderabad","Cybercity Marina Skies, Green Hills Rd, Kukatpally","AC_1_PHASE",7.4,10,17.465639,78.408033],
+      ["124","MS TSSP 8TH Battalion Service Station Kondapur","Hyderabad","Serilingampally, Kondapur","DC",30,2,17.464947,78.364703],
+      ["02EjMjqwGCs5Vn4tayDG","EV Charge Hub, Niharika Landmark, Hyderabad","Serilingampalle","Huda Park E Rd, Lingampally","AC_3_PHASE",22,1,17.486603,78.314814],
+      ["1710","SMR Vinay Iconia Club House Cooper","Hyderabad","113-115, Botanical Garden Rd, Kondapur","AC_1_PHASE/DC",30,3,17.469209,78.333256],
+      ["1711","SMR Vinay Iconia Stanley","Hyderabad","113-115, Botanical Garden Rd, Kondapur","AC_1_PHASE",22,2,17.469205,78.333256],
+      ["62c2ba5a67b4525af5104d5f","TS | Hyderabad | The Westin Hyderabad Mindspace","Hyderabad","Raheja IT Park, HITEC City","DC",60,2,17.442090,78.381739],
+      ["4403","Nagajyothi Filling Station","Kakinada","RS.NO.96/2&3 BHEEMAVARAM VILL, SAMARLAKOTA","DC",30,2,17.038880,82.182800],
+      ["11739","RENUKA ENTERPRISES","Kakinada","R.S.NO.342/5 PEDDAPURAM","DC",60,2,17.063510,82.161940],
+      ["11709","LAKSHMI LOKESH AGENCIES","Kakinada","Uppada (Aminabada), East Godavari","DC",60,2,17.088972,82.344936]
+    ];
+
+    let allStations = [];
+    let currentOrigin = { lat: 17.545200, lng: 78.370500, label: 'Bachupally (Black Diamond / Gothic Pentagon)' };
+    let rangeKm = 5;
+    let tapMapMode = false;
+    let useOsrmRoadRouting = true; // Default ON: real road routing via OSRM
+    let activeTileKey = 'google_road';
+    let activeCatModalFilter = 'all';
+
+    let map, tileLayers = {}, currentTileLayer = null;
+    let markersLayerGroup, routeLayerGroup, radiusCircle, originMarker;
+    let activeNearby = [], chainedStops = [];
+    let osrmRequestCounter = 0;
+
+    function showToast(msg) {
+      const box = document.getElementById('toast-box');
+      const txt = document.getElementById('toast-text');
+      if (!box || !txt) return;
+      txt.textContent = msg;
+      box.classList.remove('opacity-0');
+      box.classList.add('opacity-100');
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => {
+        box.classList.remove('opacity-100');
+        box.classList.add('opacity-0');
+      }, 3200);
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371.0;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function getStationKey(s) {
+      return `${s.id}__${s.lat.toFixed(6)}_${s.lng.toFixed(6)}`;
+    }
+
+    // 3. Initialize Leaflet Map with Google Road, Google Hybrid, Google Terrain & Carto Voyager HD Tiles
+    function initMap() {
+      map = L.map('map', {
+        center: [currentOrigin.lat, currentOrigin.lng],
+        zoom: 14,
+        maxZoom: 21
+      });
+
+      tileLayers = {
+        google_road: L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+          maxZoom: 21,
+          attribution: '&copy; Google Maps Road'
+        }),
+        google_hybrid: L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+          maxZoom: 21,
+          attribution: '&copy; Google Maps Hybrid Satellite'
+        }),
+        google_terrain: L.tileLayer('https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+          maxZoom: 21,
+          attribution: '&copy; Google Maps Terrain'
+        }),
+        carto_voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+          maxZoom: 20,
+          subdomains: 'abcd',
+          attribution: '&copy; OpenStreetMap &copy; CARTO'
+        })
+      };
+
+      currentTileLayer = tileLayers.google_road.addTo(map);
+      routeLayerGroup = L.layerGroup().addTo(map);
+      markersLayerGroup = L.layerGroup().addTo(map);
+
+      map.on('click', (e) => {
+        if (tapMapMode) {
+          toggleTapMapMode(false);
+          setExactOrigin(e.latlng.lat, e.latlng.lng, 'Pinned on Map');
+          showToast(`Origin moved to ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
+        }
+      });
+    }
+
+    function setMapTileSource(sourceKey) {
+      if (!tileLayers[sourceKey] || !map) return;
+      if (currentTileLayer) {
+        map.removeLayer(currentTileLayer);
+      }
+      activeTileKey = sourceKey;
+      currentTileLayer = tileLayers[sourceKey].addTo(map);
+
+      ['google_road', 'google_hybrid', 'google_terrain', 'carto_voyager'].forEach((k) => {
+        const btn = document.getElementById('tile-' + k);
+        if (!btn) return;
+        btn.className = (k === sourceKey)
+          ? 'px-2 py-1 rounded-md bg-blue-600 text-white font-bold transition-all'
+          : 'px-2 py-1 rounded-md text-slate-300 hover:text-white transition-all';
+      });
+      showToast(`Switched map source to ${sourceKey.replace('_', ' ').toUpperCase()}`);
+    }
+
+    function toggleRoutingGeometryMode() {
+      useOsrmRoadRouting = !useOsrmRoadRouting;
+      const btn = document.getElementById('btn-route-mode');
+      if (useOsrmRoadRouting) {
+        btn.textContent = '🛣️ Mode: Road Route (OSRM)';
+        btn.className = 'px-2.5 py-1 rounded-lg bg-blue-600/25 hover:bg-blue-600/35 text-blue-300 border border-blue-500/40 text-xs font-bold transition-all';
+        showToast('Switched to OSRM Live Turn-by-Turn Road Routing');
+      } else {
+        btn.textContent = '📏 Mode: Straight-Line Air';
+        btn.className = 'px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold transition-all';
+        showToast('Switched to Straight-Line Air Chaining');
+      }
+      recomputeAll(false);
+    }
+
+    function loadSeedData() {
+      allStations = SEED_STATIONS.map((r, idx) => ({
+        uid: idx + 1,
+        id: String(r[0]),
+        name: String(r[1]),
+        city: String(r[2]),
+        addr: String(r[3]),
+        power: String(r[4]),
+        kw: Number(r[5]),
+        pts: Number(r[6]),
+        lat: Number(r[7]),
+        lng: Number(r[8])
+      }));
+      recomputeAll(true);
+    }
+
+    // 4. Exact 12-Column Excel Parser for DOC-20261107-WA0060.xls (No false substring matches)
+    function handleExcelUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      showToast(`Parsing ${file.name}...`);
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+          const sheetName = wb.SheetNames[0];
+          const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
+          parseExcelRowsExact(aoa, file.name, sheetName);
+        } catch (err) {
+          showToast('Error reading Excel file. Please check file format.');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function parseExcelRowsExact(aoa, fileName, sheetName) {
+      if (!aoa || aoa.length < 2) return;
+      let headerRowIdx = 0;
+      let iLat = -1, iLng = -1, iId = -1, iName = -1, iCity = -1, iAddr = -1, iPower = -1, iKw = -1;
+
+      const latRegex = /^(lat|latitude|y_coord|lat_dd)$/i;
+      const lngRegex = /^(long|lng|lon|longitude|x_coord|long_dd)$/i;
+
+      for (let r = 0; r < Math.min(10, aoa.length); r++) {
+        const row = aoa[r].map(c => String(c || '').trim());
+        const fLat = row.findIndex(h => latRegex.test(h));
+        const fLng = row.findIndex(h => lngRegex.test(h));
+        if (fLat !== -1 && fLng !== -1) {
+          headerRowIdx = r;
+          iLat = fLat;
+          iLng = fLng;
+          iId = row.findIndex(h => /^location\s*id$|^id$|^s\.?no$/i.test(h));
+          iName = row.findIndex(h => /^location\s*name$|^station\s*name$|^name$|^title$/i.test(h));
+          iCity = row.findIndex(h => /^city/i.test(h));
+          iAddr = row.findIndex(h => /^address/i.test(h));
+          iPower = row.findIndex(h => /^power\s*type/i.test(h));
+          iKw = row.findIndex(h => /^capacity/i.test(h));
+          break;
+        }
+      }
+
+      const grouped = new Map();
+      let rawValidCount = 0;
+
+      for (let r = headerRowIdx + 1; r < aoa.length; r++) {
+        const row = aoa[r];
+        if (!row || row.length === 0) continue;
+        let lat = iLat !== -1 ? parseFloat(row[iLat]) : NaN;
+        let lng = iLng !== -1 ? parseFloat(row[iLng]) : NaN;
+
+        if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) continue;
+        if (lat > 65 && lat < 99 && lng > 6 && lng < 39) {
+          const tmp = lat; lat = lng; lng = tmp;
+        }
+        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+
+        rawValidCount++;
+        const id = iId !== -1 ? String(row[iId] ?? '').trim() : `ROW_${r}`;
+        const name = (iName !== -1 && String(row[iName] || '').trim()) ? String(row[iName]).trim() : `Station ${id}`;
+        const city = iCity !== -1 ? String(row[iCity] || '').trim() : '';
+        const addr = iAddr !== -1 ? String(row[iAddr] || '').trim() : '';
+        const power = iPower !== -1 ? String(row[iPower] || '').trim() : '';
+        const kw = iKw !== -1 ? (parseFloat(row[iKw]) || 0) : 0;
+
+        const key = `${id}|${name}|${lat.toFixed(6)}|${lng.toFixed(6)}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, { id, name, city, addr, powers: new Set(power ? [power] : []), kw, pts: 1, lat, lng });
+        } else {
+          const g = grouped.get(key);
+          g.pts += 1;
+          if (power) g.powers.add(power);
+          if (kw > g.kw) g.kw = kw;
+        }
+      }
+
+      allStations = Array.from(grouped.values()).map((g, idx) => ({
+        uid: idx + 1,
+        id: g.id,
+        name: g.name,
+        city: g.city,
+        addr: g.addr,
+        power: Array.from(g.powers).join('/'),
+        kw: g.kw,
+        pts: g.pts,
+        lat: g.lat,
+        lng: g.lng
+      }));
+
+      document.getElementById('lbl-file').textContent = `${fileName} (${sheetName})`;
+      document.getElementById('lbl-stats').textContent =
+        `${rawValidCount.toLocaleString()} valid connector rows • ${allStations.length.toLocaleString()} unique stations`;
+      showToast(`Loaded ${allStations.length.toLocaleString()} unique stations from ${fileName}`);
+      recomputeAll(true);
+    }
+
+    function toggleTapMapMode(force) {
+      tapMapMode = typeof force === 'boolean' ? force : !tapMapMode;
+      const btn = document.getElementById('btn-tap-map');
+      btn.className = tapMapMode
+        ? 'px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold animate-pulse'
+        : 'px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold';
+      if (tapMapMode) showToast('Tap anywhere on the Google Map to set your exact starting location');
+    }
+
+    function setExactOrigin(lat, lng, label, accuracyMeters = null) {
+      currentOrigin = { lat: Number(lat), lng: Number(lng), label: label || 'Custom Origin' };
+      const accTxt = accuracyMeters ? ` (±${Math.round(accuracyMeters)}m)` : '';
+      document.getElementById('gps-badge').textContent =
+        `📍 Origin: ${currentOrigin.lat.toFixed(6)}, ${currentOrigin.lng.toFixed(6)} (${currentOrigin.label}${accTxt})`;
+      recomputeAll(true);
+    }
+
+    function requestExactGPS() {
+      if (!navigator.geolocation) {
+        showToast('Browser Geolocation unavailable. Use the search bar or tap the map.');
+        return;
+      }
+      document.getElementById('gps-badge').textContent = '🛰️ Locking high-accuracy GPS...';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          const warn = accuracy > 500 ? ' ⚠️ Coarse Wi-Fi/IP Fix' : ' 🟢 Exact GPS';
+          setExactOrigin(latitude, longitude, warn, accuracy);
+          showToast(`GPS locked: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+        },
+        () => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => setExactOrigin(pos.coords.latitude, pos.coords.longitude, 'Network GPS', pos.coords.accuracy),
+            () => {
+              document.getElementById('gps-badge').textContent =
+                `📍 Origin: ${currentOrigin.lat.toFixed(6)}, ${currentOrigin.lng.toFixed(6)} (${currentOrigin.label})`;
+              showToast(`Using preset origin: ${currentOrigin.label}`);
+            },
+            { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+          );
+        },
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+      );
+    }
+
+    async function applyLocationInput() {
+      const raw = document.getElementById('loc-input').value.trim();
+      if (!raw) return;
+
+      const bangMatch = raw.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+      if (bangMatch) {
+        return setExactOrigin(parseFloat(bangMatch[1]), parseFloat(bangMatch[2]), 'From Maps Link');
+      }
+      const pairMatch = raw.match(/(-?\d{1,2}\.\d{3,})\s*[,\s]\s*(-?\d{1,3}\.\d{3,})/);
+      if (pairMatch) {
+        return setExactOrigin(parseFloat(pairMatch[1]), parseFloat(pairMatch[2]), 'Exact Coords');
+      }
+
+      const q = raw.toLowerCase();
+      const foundStation = allStations.find(s => s.name.toLowerCase().includes(q) || s.addr.toLowerCase().includes(q));
+      if (foundStation) {
+        return setExactOrigin(foundStation.lat, foundStation.lng, foundStation.name);
+      }
+
+      try {
+        showToast(`Searching place "${raw}"...`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(raw)}&limit=1`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          setExactOrigin(parseFloat(data[0].lat), parseFloat(data[0].lon), data[0].display_name.split(',')[0]);
+        } else {
+          showToast('Place not found. Paste Lat, Long (e.g., 17.5452, 78.3705) or tap the map.');
+        }
+      } catch (err) {
+        showToast('Geocoder offline. Paste Lat, Long directly or tap the map.');
+      }
+    }
+
+    function setRangeKm(val) {
+      const n = parseFloat(val);
+      if (isNaN(n) || n <= 0) return;
+      rangeKm = n;
+      document.getElementById('rng-custom').value = n;
+      [5, 10, 15].forEach(k => {
+        const b = document.getElementById('rng-' + k);
+        if (b) {
+          b.className = (k === n)
+            ? 'flex-1 py-1 rounded bg-emerald-600 text-white font-bold'
+            : 'flex-1 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700';
+        }
+      });
+      recomputeAll(true);
+    }
+
+    function setStationCategory(uid, cat) {
+      const st = allStations.find(s => s.uid === uid);
+      if (!st) return;
+      const key = getStationKey(st);
+      if (cat === 'active') {
+        delete categoryMap[key];
+      } else {
+        categoryMap[key] = { cat, id: st.id, name: st.name, city: st.city, lat: st.lat, lng: st.lng };
+      }
+      SafeStore.set(CAT_KEY, JSON.stringify(categoryMap));
+      showToast(cat === 'new' ? `🚧 Marked "${st.name}" as New / Yet to Open` : `🚫 Added "${st.name}" to Blacklist`);
+      recomputeAll(false);
+      renderCategoryModal(activeCatModalFilter);
+    }
+
+    // 5. Core Filter + Nearest-Neighbor Chain + Live OSRM Road Routing Trigger
+    function recomputeAll(fitMap = false) {
+      const vals = Object.values(categoryMap);
+      document.getElementById('cnt-new').textContent = vals.filter(v => v.cat === 'new').length;
+      document.getElementById('cnt-black').textContent = vals.filter(v => v.cat === 'blacklist').length;
+
+      const pwrFilter = document.getElementById('power-filter')?.value || 'ALL';
+
+      activeNearby = [];
+      for (const s of allStations) {
+        if (categoryMap[getStationKey(s)]) continue;
+        if (pwrFilter === 'DC' && !String(s.power).toUpperCase().includes('DC')) continue;
+        if (pwrFilter === 'AC' && !String(s.power).toUpperCase().includes('AC')) continue;
+
+        const d = haversineKm(currentOrigin.lat, currentOrigin.lng, s.lat, s.lng);
+        if (d <= rangeKm) {
+          activeNearby.push({ ...s, directKm: d });
+        }
+      }
+      activeNearby.sort((a, b) => a.directKm - b.directKm);
+
+      const chainOn = document.getElementById('chk-chain').checked;
+      const rangeMode = document.getElementById('range-mode').value;
+      chainedStops = [];
+
+      if (chainOn && activeNearby.length > 0) {
+        const pool = [...activeNearby];
+        let cLat = currentOrigin.lat, cLng = currentOrigin.lng, cumKm = 0, step = 1;
+        while (pool.length > 0) {
+          let bestIdx = 0, bestLeg = Infinity;
+          for (let i = 0; i < pool.length; i++) {
+            const leg = haversineKm(cLat, cLng, pool[i].lat, pool[i].lng);
+            if (leg < bestLeg) { bestLeg = leg; bestIdx = i; }
+          }
+          if (rangeMode === 'chain_cap' && step > 1 && (cumKm + bestLeg) > rangeKm) break;
+          const pick = pool.splice(bestIdx, 1)[0];
+          cumKm += bestLeg;
+          chainedStops.push({
+            ...pick,
+            step,
+            legKm: bestLeg,
+            cumKm,
+            roadLegKm: null,
+            roadCumKm: null,
+            roadLegMins: null
+          });
+          cLat = pick.lat;
+          cLng = pick.lng;
+          step++;
+        }
+      }
+
+      renderStationList();
+      renderMapMarkersAndRoute(fitMap);
+    }
+
+    // 6. Live OSRM Road Routing Engine (Draws Real Street Geometry & Updates Driving KM + ETA)
+    async function fetchAndRenderOsrmRoadRoute(stops, reqId) {
+      const badge = document.getElementById('route-engine-badge');
+      const roadSummaryEl = document.getElementById('road-summary');
+
+      if (!useOsrmRoadRouting || !stops || stops.length === 0) {
+        if (badge) badge.textContent = '📏 Straight-Line Chain Mode';
+        if (roadSummaryEl) roadSummaryEl.textContent = '';
+        drawStraightLineChain(stops);
+        return;
+      }
+
+      // OSRM public router supports up to 25 coordinates per request
+      const cappedStops = stops.slice(0, 24);
+      const coordsList = [
+        `${currentOrigin.lng.toFixed(6)},${currentOrigin.lat.toFixed(6)}`,
+        ...cappedStops.map(s => `${s.lng.toFixed(6)},${s.lat.toFixed(6)}`)
+      ];
+
+      const url = `https://router.project-osrm.org/route/v1/driving/${coordsList.join(';')}?overview=full&geometries=geojson&steps=false`;
+
+      try {
+        if (badge) badge.textContent = '🔄 Fetching Live Road Route...';
+        const res = await fetch(url);
+        if (reqId !== osrmRequestCounter) return;
+        const data = await res.json();
+
+        if (data && data.code === 'Ok' && data.routes && data.routes.length > 0) {
+          const route = data.routes[0];
+          const legs = route.legs || [];
+          let runningRoadKm = 0;
+
+          for (let i = 0; i < cappedStops.length; i++) {
+            if (legs[i]) {
+              const legKm = legs[i].distance / 1000.0;
+              const legMins = legs[i].duration / 60.0;
+              runningRoadKm += legKm;
+              cappedStops[i].roadLegKm = legKm;
+              cappedStops[i].roadCumKm = runningRoadKm;
+              cappedStops[i].roadLegMins = legMins;
+            }
+          }
+
+          // Clear and draw Google-Maps style dual-stroke road route
+          routeLayerGroup.clearLayers();
+          const latLngCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+
+          // Outer dark-blue casing
+          L.polyline(latLngCoords, {
+            color: '#1e3a8a',
+            weight: 8,
+            opacity: 0.85,
+            lineCap: 'round',
+            lineJoin: 'round'
+          }).addTo(routeLayerGroup);
+
+          // Inner vibrant Google-Maps navigation blue/cyan line
+          L.polyline(latLngCoords, {
+            color: '#38bdf8',
+            weight: 4.5,
+            opacity: 1.0,
+            lineCap: 'round',
+            lineJoin: 'round'
+          }).addTo(routeLayerGroup);
+
+          // Add road distance badges at the midpoint of each station pair
+          let prevLat = currentOrigin.lat, prevLng = currentOrigin.lng;
+          cappedStops.forEach((s) => {
+            if (s.roadLegKm !== null) {
+              const midLat = (prevLat + s.lat) / 2;
+              const midLng = (prevLng + s.lng) / 2;
+              const pillIcon = L.divIcon({
+                className: 'custom-pin',
+                html: `<span class="road-leg-pill">🛣️ +${s.roadLegKm.toFixed(2)} km (${Math.max(1, Math.round(s.roadLegMins))}m)</span>`,
+                iconSize: [96, 18],
+                iconAnchor: [48, 9]
+              });
+              L.marker([midLat, midLng], { icon: pillIcon, interactive: false }).addTo(routeLayerGroup);
+            }
+            prevLat = s.lat;
+            prevLng = s.lng;
+          });
+
+          const totalRoadKm = (route.distance / 1000.0).toFixed(2);
+          const totalRoadMins = Math.max(1, Math.round(route.duration / 60.0));
+          if (badge) badge.textContent = `🛣️ Live Road Route Active (${totalRoadKm} km • ~${totalRoadMins} mins)`;
+          if (roadSummaryEl) {
+            roadSummaryEl.textContent = `🛣️ Actual Driving Route: ${totalRoadKm} km (~${totalRoadMins} mins drive)`;
+          }
+
+          renderStationList();
+          return;
+        }
+      } catch (err) {
+        // Fallback if offline or rate-limited
+      }
+
+      if (reqId !== osrmRequestCounter) return;
+      if (badge) badge.textContent = '📏 Straight-Line Fallback (Offline)';
+      if (roadSummaryEl) roadSummaryEl.textContent = '';
+      drawStraightLineChain(stops);
+    }
+
+    function drawStraightLineChain(stops) {
+      routeLayerGroup.clearLayers();
+      if (!stops || stops.length === 0) return;
+      const polyPts = [[currentOrigin.lat, currentOrigin.lng], ...stops.map(s => [s.lat, s.lng])];
+      L.polyline(polyPts, { color: '#059669', weight: 6, opacity: 0.4 }).addTo(routeLayerGroup);
+      L.polyline(polyPts, { color: '#10b981', weight: 3.5, opacity: 0.95, dashArray: '8,6' }).addTo(routeLayerGroup);
+    }
+
+    function renderStationList() {
+      const container = document.getElementById('station-list');
+      const chainOn = document.getElementById('chk-chain').checked;
+      const baseList = chainOn ? chainedStops : activeNearby;
+      const searchQ = (document.getElementById('station-search')?.value || '').toLowerCase().trim();
+
+      const list = searchQ
+        ? baseList.filter(s =>
+            s.name.toLowerCase().includes(searchQ) ||
+            s.id.toLowerCase().includes(searchQ) ||
+            s.city.toLowerCase().includes(searchQ) ||
+            s.power.toLowerCase().includes(searchQ)
+          )
+        : baseList;
+
+      const rawSum = baseList.reduce((acc, s) => acc + (s.pts || 1), 0);
+      const lastCumAir = chainedStops.length ? chainedStops[chainedStops.length - 1].cumKm.toFixed(2) : '0.00';
+
+      document.getElementById('chain-summary').textContent =
+        `${baseList.length} Stations (${rawSum} Connectors) in ${rangeKm} km • Air Chain: ${lastCumAir} km`;
+
+      if (list.length === 0) {
+        container.innerHTML = `<div class="p-4 text-center text-xs text-slate-400 bg-slate-950 rounded-lg border border-slate-800">
+          No active stations within ${rangeKm} km matching filter. Increase Range (10 km / 15 km) or click a Hub button above.
+        </div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(s => {
+        const roadBadge = (s.roadLegKm !== null && s.roadLegKm !== undefined)
+          ? `<div class="text-[11px] text-sky-300 font-semibold mt-0.5">
+               🛣️ Road Leg: <b>+${s.roadLegKm.toFixed(2)} km</b> (~${Math.max(1, Math.round(s.roadLegMins))} min) • Road Total: <b>${s.roadCumKm.toFixed(2)} km</b>
+             </div>`
+          : '';
+
+        return `
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-blue-500/50 transition-all flex items-start justify-between gap-2">
+            <div class="min-w-0 cursor-pointer flex-1" onclick="map.flyTo([${s.lat}, ${s.lng}], 17)">
+              <div class="flex items-center gap-1.5">
+                ${s.step ? `<span class="px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 font-extrabold text-[11px]">#${s.step}</span>` : ''}
+                <span class="text-xs font-bold text-white truncate">${s.name}</span>
+              </div>
+              <div class="text-[11px] text-slate-400 mt-0.5">
+                ID: <span class="text-slate-300 font-mono">${s.id}</span> • Exact: <span class="text-emerald-300 font-mono">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</span>
+              </div>
+              <div class="text-[11px] text-slate-300 mt-0.5">
+                📏 Direct Air: <b>${s.directKm.toFixed(2)} km</b>
+                ${s.step ? ` • Air Leg: <b>+${s.legKm.toFixed(2)} km</b>` : ''}
+                • <span class="text-amber-300 font-semibold">⚡ ${s.power} ${s.kw}kW (${s.pts} pts)</span>
+              </div>
+              ${roadBadge}
+            </div>
+            <div class="flex flex-col gap-1 shrink-0">
+              <button onclick="setStationCategory(${s.uid}, 'new')" title="Mark New / Yet to Open" class="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold">🚧 New</button>
+              <button onclick="setStationCategory(${s.uid}, 'blacklist')" title="Add to Blacklist" class="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[10px] font-bold">🚫 Hide</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMapMarkersAndRoute(fitMap) {
+      if (!map) return;
+      markersLayerGroup.clearLayers();
+      routeLayerGroup.clearLayers();
+
+      // Radius Circle
+      radiusCircle = L.circle([currentOrigin.lat, currentOrigin.lng], {
+        radius: rangeKm * 1000,
+        color: '#2563eb',
+        weight: 2,
+        fillColor: '#3b82f6',
+        fillOpacity: 0.05,
+        dashArray: '6,6'
+      }).addTo(markersLayerGroup);
+
+      // Google-Maps Style Pulsing Blue Current Location Marker (Draggable)
+      const origIcon = L.divIcon({
+        className: 'custom-pin',
+        html: `<div class="gm-user-dot"><div class="gm-user-halo"></div><div class="gm-user-core"></div></div>`,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      });
+
+      originMarker = L.marker([currentOrigin.lat, currentOrigin.lng], {
+        icon: origIcon,
+        draggable: true,
+        zIndexOffset: 1000
+      })
+        .bindPopup(`
+          <div style="font-size:12px;">
+            <b style="color:#38bdf8;">📍 Current Starting Location</b><br/>
+            <span>${currentOrigin.label}</span><br/>
+            <code style="color:#34d399;">${currentOrigin.lat.toFixed(6)}, ${currentOrigin.lng.toFixed(6)}</code><br/>
+            <span style="font-size:11px;color:#94a3b8;">Drag this blue pin to any street or building!</span>
+          </div>
+        `)
+        .addTo(markersLayerGroup);
+
+      originMarker.on('dragend', (e) => {
+        const p = e.target.getLatLng();
+        setExactOrigin(p.lat, p.lng, 'Dragged Origin Pin');
+      });
+
+      const chainOn = document.getElementById('chk-chain').checked;
+      const list = chainOn ? chainedStops : activeNearby;
+
+      // Spiderfy / fan-out pins sharing identical or <15m coordinates so Stop #1 at 0.00km is never hidden under Origin
+      const coordCounts = {};
+      list.forEach((s) => {
+        const bucket = `${s.lat.toFixed(4)}_${s.lng.toFixed(4)}`;
+        coordCounts[bucket] = (coordCounts[bucket] || 0) + 1;
+      });
+      const coordSeen = {};
+
+      list.forEach((s) => {
+        const bucket = `${s.lat.toFixed(4)}_${s.lng.toFixed(4)}`;
+        const idxInBucket = coordSeen[bucket] || 0;
+        coordSeen[bucket] = idxInBucket + 1;
+
+        let dispLat = s.lat, dispLng = s.lng;
+        const nearOrigin = haversineKm(currentOrigin.lat, currentOrigin.lng, s.lat, s.lng) < 0.02;
+        if (coordCounts[bucket] > 1 || nearOrigin) {
+          const angle = (idxInBucket + (nearOrigin ? 1 : 0)) * (2 * Math.PI / Math.max(4, coordCounts[bucket] + 1));
+          dispLat = s.lat + Math.sin(angle) * 0.00022;
+          dispLng = s.lng + Math.cos(angle) * 0.00022;
+          L.polyline([[s.lat, s.lng], [dispLat, dispLng]], {
+            color: '#f59e0b',
+            weight: 2,
+            dashArray: '3,3'
+          }).addTo(markersLayerGroup);
+        }
+
+        const badge = s.step ? s.step : '⚡';
+        const isDC = String(s.power).toUpperCase().includes('DC');
+        const bgCol = s.step ? '#059669' : (isDC ? '#d97706' : '#0284c7');
+
+        const pinIcon = L.divIcon({
+          className: 'custom-pin',
+          html: `<div style="width:28px;height:28px;border-radius:50%;background:${bgCol};color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;border:2.5px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,0.65);">${badge}</div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
+        });
+
+        const singleNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${currentOrigin.lat.toFixed(6)},${currentOrigin.lng.toFixed(6)}&destination=${s.lat.toFixed(6)},${s.lng.toFixed(6)}&travelmode=driving`;
+
+        const popupHtml = `
+          <div style="min-width:230px;font-size:12px;">
+            <div style="font-weight:800;color:#34d399;margin-bottom:2px;">${s.step ? `Stop #${s.step}: ` : ''}${s.name}</div>
+            <div style="color:#94a3b8;font-size:11px;">Location Id: <b>${s.id}</b> • ${s.city}</div>
+            <div style="color:#cbd5e1;font-size:11px;margin-top:2px;">${s.addr}</div>
+            <div style="margin:4px 0;font-family:monospace;font-size:11px;color:#38bdf8;">Exact: ${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</div>
+            <div style="font-size:11px;color:#e2e8f0;">
+              Direct Air: <b>${s.directKm.toFixed(2)} km</b>
+              ${s.step ? ` | Air Leg: <b>+${s.legKm.toFixed(2)} km</b>` : ''}
+            </div>
+            <div style="font-size:11px;color:#fcd34d;margin-top:2px;">⚡ ${s.power} • ${s.kw} kW (${s.pts} connectors)</div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <button onclick="setStationCategory(${s.uid}, 'new')" style="flex:1;padding:5px;border-radius:6px;background:#d97706;color:#fff;font-weight:700;border:none;cursor:pointer;font-size:11px;">🚧 New</button>
+              <button onclick="setStationCategory(${s.uid}, 'blacklist')" style="flex:1;padding:5px;border-radius:6px;background:#e11d48;color:#fff;font-weight:700;border:none;cursor:pointer;font-size:11px;">🚫 Blacklist</button>
+            </div>
+            <a href="${singleNavUrl}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;margin-top:6px;padding:5px;border-radius:6px;background:#2563eb;color:#fff;font-weight:700;text-decoration:none;font-size:11px;">
+              🧭 Navigate to This Station in Google Maps
+            </a>
+          </div>
+        `;
+        L.marker([dispLat, dispLng], { icon: pinIcon }).bindPopup(popupHtml).addTo(markersLayerGroup);
+      });
+
+      if (fitMap) {
+        fitMapToActiveBounds();
+      }
+
+      // Trigger Live OSRM Road Route calculation if Chain is enabled
+      osrmRequestCounter++;
+      if (chainOn && chainedStops.length > 0) {
+        fetchAndRenderOsrmRoadRoute(chainedStops, osrmRequestCounter);
+      } else {
+        document.getElementById('road-summary').textContent = '';
+      }
+    }
+
+    function fitMapToActiveBounds() {
+      if (!map || !radiusCircle) return;
+      map.fitBounds(radiusCircle.getBounds(), { padding: [24, 24], maxZoom: 15 });
+    }
+
+    // 7. Official Google Maps Universal Cross-Platform Multi-Stop Directions URL (?api=1)
+    function buildGoogleMapsUrl() {
+      const list = document.getElementById('chk-chain').checked ? chainedStops : activeNearby;
+      if (list.length === 0) return '';
+      const origin = `${currentOrigin.lat.toFixed(6)},${currentOrigin.lng.toFixed(6)}`;
+      const stops = list.slice(0, 10); // Google Maps supports Origin + up to 9 intermediate waypoints + Destination
+      const dest = `${stops[stops.length - 1].lat.toFixed(6)},${stops[stops.length - 1].lng.toFixed(6)}`;
+      const waypoints = stops.slice(0, -1).map(s => `${s.lat.toFixed(6)},${s.lng.toFixed(6)}`).join('|');
+      return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}${waypoints ? `&waypoints=${encodeURIComponent(waypoints)}` : ''}&travelmode=driving`;
+    }
+
+    function copyChainUrl() {
+      const url = buildGoogleMapsUrl();
+      if (!url) {
+        showToast('No active stops in range to copy.');
+        return;
+      }
+      try {
+        navigator.clipboard.writeText(url);
+      } catch (e) {}
+
+      const list = document.getElementById('chk-chain').checked ? chainedStops : activeNearby;
+      document.getElementById('url-modal-info').textContent =
+        `Origin (${currentOrigin.lat.toFixed(5)}, ${currentOrigin.lng.toFixed(5)}) + ${Math.min(10, list.length)} Chained Stops ready for Google Maps:`;
+      document.getElementById('url-modal-textarea').value = url;
+      document.getElementById('url-modal-open-btn').href = url;
+      document.getElementById('url-modal').classList.remove('hidden');
+      document.getElementById('url-modal').classList.add('flex');
+      showToast('Copied Multi-Stop Google Maps URL!');
+    }
+
+    function closeUrlModal() {
+      document.getElementById('url-modal').classList.add('hidden');
+      document.getElementById('url-modal').classList.remove('flex');
+    }
+
+    function openChainInGoogleMaps() {
+      const url = buildGoogleMapsUrl();
+      if (!url) {
+        showToast('No active stops in range.');
+        return;
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    // 8. Maintained Categories Modal (New / Yet to Open & Blacklist)
+    function openCategoryModal(filterType = 'all') {
+      renderCategoryModal(filterType);
+      document.getElementById('cat-modal').classList.remove('hidden');
+      document.getElementById('cat-modal').classList.add('flex');
+    }
+
+    function closeCategoryModal() {
+      document.getElementById('cat-modal').classList.add('hidden');
+      document.getElementById('cat-modal').classList.remove('flex');
+    }
+
+    function renderCategoryModal(filterType = 'all') {
+      activeCatModalFilter = filterType;
+      ['all', 'new', 'blacklist'].forEach(t => {
+        const btn = document.getElementById('cat-tab-' + t);
+        if (!btn) return;
+        btn.className = (t === filterType)
+          ? 'px-3 py-1 rounded-lg bg-blue-600 text-white font-bold'
+          : 'px-3 py-1 rounded-lg bg-slate-800 text-slate-300 font-semibold';
+      });
+
+      const entries = Object.entries(categoryMap).filter(([, v]) => filterType === 'all' ? true : v.cat === filterType);
+      const box = document.getElementById('cat-modal-list');
+      if (entries.length === 0) {
+        box.innerHTML = `<div class="p-6 text-center text-slate-400 bg-slate-950 rounded-xl border border-slate-800">No stations currently hidden in this category.</div>`;
+        return;
+      }
+      box.innerHTML = entries.map(([k, v]) => `
+        <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
+          <div>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${v.cat === 'new' ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'}">
+              ${v.cat === 'new' ? '🚧 NEW / YET TO OPEN' : '🚫 BLACKLIST'}
+            </span>
+            <span class="font-bold text-white ml-1">${v.name}</span>
+            <div class="text-[11px] text-slate-400 mt-0.5">ID: ${v.id} • ${v.city || ''} • <span class="font-mono text-emerald-300">${Number(v.lat).toFixed(6)}, ${Number(v.lng).toFixed(6)}</span></div>
+          </div>
+          <button onclick="restoreKey('${k.replace(/'/g, "\\'")}')" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shrink-0">
+            ♻️ Restore
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function restoreKey(k) {
+      delete categoryMap[k];
+      SafeStore.set(CAT_KEY, JSON.stringify(categoryMap));
+      recomputeAll(false);
+      renderCategoryModal(activeCatModalFilter);
+      showToast('Station restored to active map & chain!');
+    }
+
+    function restoreAllCategories() {
+      categoryMap = {};
+      SafeStore.set(CAT_KEY, JSON.stringify(categoryMap));
+      recomputeAll(false);
+      renderCategoryModal(activeCatModalFilter);
+      showToast('Restored all hidden stations!');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadSeedData();
+      requestExactGPS();
+    });
+  </script>
+</body>
+</html>
+=======
+  <title>GeoChain EV & Maps v6 — Full-Screen 2-Tab Navigation & Blue Mark GPS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #0b1120;
+      color: #f8fafc;
+      margin: 0;
+      overflow-x: hidden;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.55); border-radius: 9999px; }
+
+    .custom-pin { background: transparent !important; border: none !important; }
+    .leaflet-popup-content-wrapper {
+      background: #0f172a !important;
+      color: #f8fafc !important;
+      border-radius: 14px !important;
+      border: 1px solid #334155 !important;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.75) !important;
+    }
+    .leaflet-popup-tip { background: #0f172a !important; }
+    .leaflet-popup-content { margin: 10px 12px !important; }
+
+    /* Prominent Pulsing Google Maps Style Blue Mark for User Origin */
+    .gm-blue-mark-wrap {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .gm-blue-mark-core {
+      width: 20px;
+      height: 20px;
+      border-radius: 9999px;
+      background: radial-gradient(circle at 35% 35%, #60a5fa, #1d4ed8 70%);
+      border: 3.5px solid #ffffff;
+      box-shadow: 0 0 16px rgba(37, 99, 235, 1), 0 3px 8px rgba(0, 0, 0, 0.65);
+      z-index: 3;
+    }
+    .gm-blue-mark-halo {
+      position: absolute;
+      width: 42px;
+      height: 42px;
+      border-radius: 9999px;
+      background: rgba(37, 99, 235, 0.32);
+      border: 2px solid rgba(96, 165, 250, 0.85);
+      animation: gmBluePulse 1.8s infinite ease-out;
+      z-index: 1;
+    }
+    .gm-blue-mark-label {
+      position: absolute;
+      top: -16px;
+      background: #1d4ed8;
+      color: #ffffff;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      padding: 1px 6px;
+      border-radius: 999px;
+      border: 1.5px solid #ffffff;
+      white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      z-index: 4;
+    }
+    @keyframes gmBluePulse {
+      0% { transform: scale(0.55); opacity: 1; }
+      100% { transform: scale(2.05); opacity: 0; }
+    }
+
+    /* Route Leg Pill on Map */
+    .road-leg-pill {
+      background: rgba(15, 23, 42, 0.94);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.65);
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.55);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100 select-none">
+
+  <!-- ===================================================================== -->
+  <!-- STICKY TOP APP BAR: 2-TAB NAVIGATION + BLUE MARK GPS + GITHUB DEPLOY  -->
+  <!-- ===================================================================== -->
+  <header class="min-h-[56px] bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-2.5 sm:px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 sticky top-0 z-[1200] shadow-lg">
+    <div class="flex items-center gap-2 flex-wrap">
+      <div class="px-2.5 py-1 rounded-lg bg-gradient-to-r from-blue-600 to-emerald-500 text-white font-extrabold text-xs shadow flex items-center gap-1.5">
+        <span>⚡ GeoChain v7</span>
+      </div>
+
+      <!-- TWO FULL-SCREEN TABS SWITCHER -->
+      <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+        <button id="nav-tab-setup" type="button" onclick="switchAppTab('setup')"
+          class="px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all bg-blue-600 text-white shadow">
+          📂 1. Data &amp; Setup
+        </button>
+        <button id="nav-tab-map" type="button" onclick="switchAppTab('map')"
+          class="px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all text-slate-300 hover:text-white">
+          🗺️ 2. Maps (<span id="nav-nearby-cnt">7</span>)
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT GLOBAL ACTIONS: GET CURRENT LOCATION (BLUE MARK), GITHUB DEPLOY & EXCLUSION LISTS -->
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <button type="button" onclick="getCurrentLocationBlueMark(true)"
+        class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-extrabold shadow-lg shadow-blue-600/30 flex items-center gap-1.5 border border-blue-400/40 transition-all"
+        title="Lock your live GPS coordinates as the Blue Mark pin on the map">
+        <span class="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
+        <span>📍 Get Current Location</span>
+      </button>
+
+      <button type="button" onclick="openGithubDeployModal()"
+        class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-extrabold shadow-lg flex items-center gap-1.5 border border-purple-400/40 transition-all"
+        title="Deploy this app to your GitHub Pages (github.io) to use on your Android phone">
+        <span>🚀 Push to GitHub.io</span>
+      </button>
+
+      <button type="button" onclick="openCategoryModal('all')"
+        class="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all">
+        🚧 <span id="cnt-new">0</span> | 🚫 <span id="cnt-black">0</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 1: "📂 1. DATA & SETUP" (FULL-SCREEN EXCEL UPLOAD & DATA PREVIEW) -->
+  <!-- ===================================================================== -->
+  <main id="view-tab-setup" class="flex-1 max-w-6xl w-full mx-auto p-3 sm:p-5 flex flex-col gap-4 pb-28">
+
+    <!-- Top Banner with Instant "Next -> Open Full-Screen Map" & GitHub.io Android Deploy CTA -->
+    <div class="bg-gradient-to-r from-slate-900 via-blue-950/60 to-slate-900 border border-blue-500/30 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-xl">
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-400/40 text-blue-300 text-[11px] font-bold">STEP 1 OF 2</span>
+          <h1 class="text-base sm:text-lg font-extrabold text-white">Upload Excel Sheet, Inspect Stations &amp; Set Starting Origin</h1>
+        </div>
+        <p class="text-xs text-slate-300 mt-1">
+          Pre-loaded with <b>355 unique stations (814 connectors)</b> from <code class="text-emerald-300">DOC-20261107-WA0060.xls</code>. Test right here or click <b>🚀 Push to GitHub.io</b> to get a live Android URL!
+        </p>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button type="button" onclick="openGithubDeployModal()"
+          class="px-4 py-2.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/50 text-purple-200 font-extrabold text-xs flex items-center gap-1.5 transition-all">
+          <span>📱 Get Android GitHub.io URL</span>
+        </button>
+        <button type="button" onclick="switchAppTab('map')"
+          class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/25 flex items-center gap-2 transition-all">
+          <span>Next: Open Full-Screen Map</span>
+          <span class="text-base">➔</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 2-Column Setup Cards: Card A (Excel Upload) + Card B (Current or Custom Location) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+      <!-- CARD A: EXCEL SHEET UPLOADER -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-lg">
+        <div>
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-extrabold uppercase tracking-wider text-cyan-400">📊 1. Excel Source (.xls / .xlsx / .csv)</span>
+            <span id="setup-sheet-badge" class="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold">
+              ChargePoint List 24.7 Ready
+            </span>
+          </div>
+          <h2 id="lbl-file" class="text-sm font-bold text-white mt-1">DOC-20261107-WA0060.xls (355 Unique Stations Pre-Loaded)</h2>
+          <p id="lbl-stats" class="text-xs text-slate-400 mt-0.5">
+            814 Raw Connector Rows • Supports 12-column ChargePoint schema &amp; any Lat/Long sheet
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80">
+          <label class="flex-1 min-w-[160px] px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold cursor-pointer text-center shadow-md transition-all">
+            📂 Upload Excel Sheet (.xls / .xlsx)
+            <input type="file" accept=".xls,.xlsx,.csv" class="hidden" onchange="handleExcelUpload(event)" />
+          </label>
+          <button type="button" onclick="loadSeedData(true)" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold">
+            🔄 Reset 355 Seed
+          </button>
+          <button type="button" onclick="downloadStandaloneHtmlFile()" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 text-xs font-bold" title="Download single-file index.html with your current stations baked in">
+            📥 Save index.html
+          </button>
+        </div>
+      </section>
+
+      <!-- CARD B: CURRENT GPS LOCATION (BLUE MARK) OR CUSTOM LOCATION -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 shadow-lg">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <span class="text-xs font-extrabold uppercase tracking-wider text-blue-400">📍 2. Starting Origin (Blue Mark Pin)</span>
+          <span id="origin-mode-badge-setup" class="text-[11px] px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold">
+            🟣 Custom / Preset Origin
+          </span>
+        </div>
+
+        <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-xs font-bold text-white truncate" id="setup-origin-label">Bachupally (Black Diamond / Gothic Pentagon)</div>
+            <div class="text-[11px] font-mono text-emerald-300" id="setup-origin-coords">17.545200, 78.370500</div>
+          </div>
+          <button type="button" onclick="getCurrentLocationBlueMark(false)"
+            class="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold shrink-0 shadow flex items-center gap-1.5">
+            <span>📍 Get Current Location</span>
+          </button>
+        </div>
+
+        <!-- Custom Location Input on Tab 1 -->
+        <div class="flex gap-1.5">
+          <input id="loc-input-setup" type="text"
+            placeholder="Search Colony/Place, paste Google Maps link, or type 'Lat, Long' (17.5452, 78.3705)..."
+            class="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500"
+            onkeydown="if(event.key==='Enter') applyLocationInput('loc-input-setup')" />
+          <button type="button" onclick="applyLocationInput('loc-input-setup')"
+            class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shrink-0">
+            Set Origin
+          </button>
+        </div>
+
+        <!-- Quick Hub Presets -->
+        <div class="flex items-center gap-1.5 overflow-x-auto py-0.5 text-[11px]">
+          <span class="text-slate-400 font-semibold shrink-0">Hubs:</span>
+          <button type="button" onclick="setExactOrigin(17.545200, 78.370500, 'Bachupally (Black Diamond)', 'custom')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-semibold shrink-0">Bachupally (Black Diamond)</button>
+          <button type="button" onclick="setExactOrigin(17.551000, 78.385000, 'Bachupally (Jayas Platinum)', 'custom')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0">Bachupally (Jayas Platinum)</button>
+          <button type="button" onclick="setExactOrigin(17.469475, 78.407257, 'Rainbow Vista, Moosapet', 'custom')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0">Rainbow Vista</button>
+          <button type="button" onclick="setExactOrigin(17.496000, 78.361000, 'Miyapur / Nizampet', 'custom')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0">Miyapur</button>
+          <button type="button" onclick="setExactOrigin(17.442090, 78.381739, 'HITEC City / Mindspace', 'custom')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0">HITEC City</button>
+          <button type="button" onclick="setExactOrigin(16.989100, 82.247500, 'Kakinada (Ramanayyapeta)', 'custom')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0">Kakinada</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- FIXED & VERIFIED: STATION DATA & DISTANCE PREVIEW TABLE (TAB 1)       -->
+    <!-- ===================================================================== -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 shadow-lg">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm sm:text-base font-extrabold text-white">📋 Station Data &amp; Distance Preview</h3>
+            <span id="table-total-pill" class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold">
+              355 Stations Loaded
+            </span>
+          </div>
+          <p id="setup-table-summary" class="text-xs text-slate-400 mt-0.5">
+            Live distance calculated from your active Blue Mark origin (17.545200, 78.370500)
+          </p>
+        </div>
+
+        <!-- Working Search String + Two Interactive Option Dropdowns (Filter + Sort) -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Search String Input with Clear Button -->
+          <div class="relative flex items-center min-w-[220px] sm:min-w-[260px] flex-1">
+            <input id="table-search" type="text"
+              oninput="handleTableSearch(this.value)"
+              placeholder="🔍 Search Name, ID, City, Address, DC/AC..."
+              class="w-full pl-3 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-cyan-400" />
+            <button id="btn-clear-table-search" type="button" onclick="clearTableSearch()"
+              class="hidden absolute right-2 text-slate-400 hover:text-white text-xs font-bold px-1.5 py-0.5 rounded bg-slate-800">
+              ✕
+            </button>
+          </div>
+
+          <!-- Option 1: Status / Range Filter -->
+          <select id="table-status-filter" onchange="handleTableFilterChange()"
+            class="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-emerald-300 font-bold focus:outline-none focus:border-emerald-500">
+            <option value="active">✅ Active Stations Only</option>
+            <option value="in_range">🎯 Within Selected Range (5 km)</option>
+            <option value="all">📋 All Stations (Including Hidden)</option>
+            <option value="new">🚧 New / Yet to Open Only</option>
+            <option value="blacklist">🚫 Blacklist Only</option>
+          </select>
+
+          <!-- Option 2: Sort Order Mode -->
+          <select id="table-sort-mode" onchange="handleTableFilterChange()"
+            class="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-cyan-300 font-bold focus:outline-none focus:border-cyan-500">
+            <option value="distance_asc">📏 Sort: Nearest Distance First</option>
+            <option value="kw_desc">⚡ Sort: Power Capacity (High → Low)</option>
+            <option value="name_asc">🔤 Sort: Location Name (A → Z)</option>
+            <option value="row_asc">🔢 Sort: Excel Sheet Order</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Pagination & Quick Filter Pills -->
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs bg-slate-950/80 px-3 py-2 rounded-xl border border-slate-800/80">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-slate-400 font-semibold">Quick View:</span>
+          <button type="button" onclick="setQuickTableStatus('active')" id="qpill-active" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold">✅ Active</button>
+          <button type="button" onclick="setQuickTableStatus('in_range')" id="qpill-in_range" class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white font-semibold">🎯 In <span id="qpill-rng-val">5</span> km</button>
+          <button type="button" onclick="setQuickTableStatus('new')" id="qpill-new" class="px-2.5 py-1 rounded-lg bg-slate-800 text-amber-300 hover:text-white font-semibold">🚧 New / Unopened</button>
+          <button type="button" onclick="setQuickTableStatus('blacklist')" id="qpill-blacklist" class="px-2.5 py-1 rounded-lg bg-slate-800 text-rose-300 hover:text-white font-semibold">🚫 Blacklist</button>
+          <button type="button" onclick="setQuickTableStatus('all')" id="qpill-all" class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white font-semibold">📋 All</button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span id="table-page-info" class="text-slate-300 font-semibold">Showing 1–50</span>
+          <select id="table-page-size" onchange="handleTablePageSizeChange(this.value)"
+            class="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 font-semibold">
+            <option value="25">25 / page</option>
+            <option value="50" selected>50 / page</option>
+            <option value="100">100 / page</option>
+            <option value="500">All (500)</option>
+          </select>
+          <button type="button" onclick="changeTablePage(-1)" id="btn-page-prev"
+            class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold disabled:opacity-40">
+            ◀ Prev
+          </button>
+          <button type="button" onclick="changeTablePage(1)" id="btn-page-next"
+            class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold disabled:opacity-40">
+            Next ▶
+          </button>
+        </div>
+      </div>
+
+      <!-- Guaranteed Non-Blank Data Table -->
+      <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950 max-h-[460px]">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead class="bg-slate-900 text-slate-300 sticky top-0 z-10 border-b border-slate-800 uppercase text-[11px] tracking-wider">
+            <tr>
+              <th class="py-2.5 px-3">Distance</th>
+              <th class="py-2.5 px-3">Loc ID</th>
+              <th class="py-2.5 px-3">Station Name &amp; Full Address</th>
+              <th class="py-2.5 px-3">City</th>
+              <th class="py-2.5 px-3">Charger &amp; kW</th>
+              <th class="py-2.5 px-3">Exact Lat, Long</th>
+              <th class="py-2.5 px-3 text-right">Actions / Categorize</th>
+            </tr>
+          </thead>
+          <tbody id="setup-preview-tbody" class="divide-y divide-slate-800/80"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Sticky Bottom Action Bar on Tab 1 -->
+    <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-[900] w-[95%] max-w-2xl bg-slate-900/95 backdrop-blur-md border border-emerald-500/40 rounded-2xl p-2.5 shadow-2xl flex items-center justify-between gap-3">
+      <div class="text-xs pl-2">
+        <div class="font-bold text-white"><span id="setup-footer-nearby">7</span> Active Stations within <span id="setup-footer-rng">5</span> km</div>
+        <div class="text-[11px] text-emerald-300" id="setup-footer-origin">🔵 Blue Mark: 17.545200, 78.370500</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a id="setup-direct-gmaps-link" href="https://www.google.com/maps/dir/?api=1&origin=17.545200,78.370500&destination=17.561061,78.396156&travelmode=driving"
+          target="_blank" rel="noopener noreferrer"
+          class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 font-extrabold text-xs flex items-center gap-1.5">
+          <span>🗺️ Open Route in Maps</span>
+        </a>
+        <button type="button" onclick="switchAppTab('map')"
+          class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm shadow-lg flex items-center gap-2">
+          <span>Next: Open Map</span>
+          <span>➔</span>
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 2: "🗺️ 2. MAPS & CHAIN" (DEDICATED FULL-VIEWPORT UNCROPPED MAP)   -->
+  <!-- ===================================================================== -->
+  <section id="view-tab-map" class="hidden relative w-full h-[calc(100vh-56px)] overflow-hidden bg-slate-950">
+
+    <!-- FULL-SCREEN LEAFLET GOOGLE MAPS CANVAS -->
+    <div id="map" class="w-full h-full z-10"></div>
+
+    <!-- TOP FLOATING HUD ON MAP TAB: GET CURRENT LOCATION + CUSTOM LOCATION + RANGE OPTIONS -->
+    <div class="absolute top-2.5 left-2.5 right-2.5 z-[600] pointer-events-none flex flex-col gap-2 max-w-6xl mx-auto">
+
+      <!-- Primary Floating Control Bar -->
+      <div class="pointer-events-auto bg-slate-900/92 backdrop-blur-md border border-slate-700/90 rounded-2xl p-2 shadow-2xl flex flex-wrap items-center justify-between gap-2">
+
+        <!-- Left Group: Get Current Location (Blue Mark) + Search / Custom Location Toggle + Tap Map Pin -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button type="button" onclick="getCurrentLocationBlueMark(false)"
+            class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-extrabold shadow-md flex items-center gap-1.5 border border-blue-400/40"
+            title="Capture your exact GPS coordinates and place the Blue Mark pin">
+            <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+            <span>📍 Get Current Location</span>
+          </button>
+
+          <button type="button" onclick="toggleCustomLocPanel()" id="btn-custom-loc-toggle"
+            class="px-2.5 py-1.5 rounded-xl bg-purple-600/25 hover:bg-purple-600/40 text-purple-200 border border-purple-400/50 text-xs font-bold flex items-center gap-1">
+            <span>🔍 Search / Custom Location</span>
+          </button>
+
+          <button type="button" onclick="toggleTapMapMode()" id="btn-tap-map"
+            class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold">
+            📌 Tap Map to Move Blue Mark
+          </button>
+
+          <span id="gps-badge" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-950 text-emerald-300 border border-slate-800 font-medium truncate max-w-[240px] sm:max-w-[320px]">
+            🔵 Blue Mark: 17.545200, 78.370500 (Bachupally)
+          </span>
+        </div>
+
+        <!-- Right Group: Range Options (5km, 10km, 15km, 25km, Custom) + Range Mode -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <div class="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-0.5 text-xs">
+            <span class="text-[11px] text-slate-400 font-bold px-2">Range:</span>
+            <button type="button" onclick="setRangeKm(5)" id="rng-5" class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-extrabold">5 km</button>
+            <button type="button" onclick="setRangeKm(10)" id="rng-10" class="px-2.5 py-1 rounded-lg text-slate-300 hover:text-white font-semibold">10 km</button>
+            <button type="button" onclick="setRangeKm(15)" id="rng-15" class="px-2.5 py-1 rounded-lg text-slate-300 hover:text-white font-semibold">15 km</button>
+            <button type="button" onclick="setRangeKm(25)" id="rng-25" class="px-2.5 py-1 rounded-lg text-slate-300 hover:text-white font-semibold">25 km</button>
+            <input id="rng-custom" type="number" step="0.5" min="0.5" max="500" value="5" onchange="setRangeKm(this.value)"
+              class="w-14 px-1.5 py-0.5 ml-1 rounded-lg bg-slate-900 border border-slate-700 text-center text-cyan-300 font-extrabold text-xs"
+              title="Custom Range in KM" />
+          </div>
+
+          <select id="range-mode" onchange="recomputeAll(false)"
+            class="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs font-semibold">
+            <option value="radius">Radius ≤ Range km</option>
+            <option value="chain_cap">Last Stop ≤ Range km</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Search String & Custom Location Bar on the Maps Tab -->
+      <div id="map-custom-loc-drawer" class="pointer-events-auto bg-slate-900/95 backdrop-blur-md border border-purple-500/40 rounded-2xl p-2.5 shadow-2xl flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <div class="flex-1 min-w-[230px] flex gap-1.5">
+            <input id="loc-input" type="text"
+              placeholder="Search Station/Area, paste Google Maps URL, or type 'Lat, Long' (e.g. 17.5452, 78.3705)..."
+              class="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-purple-400"
+              onkeydown="if(event.key==='Enter') applyLocationInput('loc-input')" />
+            <button type="button" onclick="applyLocationInput('loc-input')"
+              class="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-extrabold shrink-0">
+              Set Blue Mark Here
+            </button>
+          </div>
+
+          <!-- Map Tile Switcher -->
+          <div class="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-0.5 text-[11px]">
+            <button type="button" onclick="setMapTileSource('google_road')" id="tile-google_road" class="px-2 py-1 rounded-lg bg-blue-600 text-white font-bold">🗺️ Google Road</button>
+            <button type="button" onclick="setMapTileSource('google_hybrid')" id="tile-google_hybrid" class="px-2 py-1 rounded-lg text-slate-300 hover:text-white">🛰️ Hybrid</button>
+            <button type="button" onclick="setMapTileSource('google_terrain')" id="tile-google_terrain" class="px-2 py-1 rounded-lg text-slate-300 hover:text-white">⛰️ Terrain</button>
+            <button type="button" onclick="setMapTileSource('carto_voyager')" id="tile-carto_voyager" class="px-2 py-1 rounded-lg text-slate-300 hover:text-white">🌐 Voyager</button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-2 flex-wrap text-[11px]">
+          <div class="flex items-center gap-1 overflow-x-auto py-0.5">
+            <span class="text-slate-400 font-semibold">Quick Hubs:</span>
+            <button type="button" onclick="setExactOrigin(17.545200, 78.370500, 'Bachupally (Black Diamond)', 'custom')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-semibold">Bachupally (Black Diamond)</button>
+            <button type="button" onclick="setExactOrigin(17.551000, 78.385000, 'Bachupally (Jayas Platinum)', 'custom')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">Bachupally (Jayas Platinum)</button>
+            <button type="button" onclick="setExactOrigin(17.469475, 78.407257, 'Rainbow Vista, Moosapet', 'custom')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">Rainbow Vista</button>
+            <button type="button" onclick="setExactOrigin(17.496000, 78.361000, 'Miyapur / Nizampet', 'custom')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">Miyapur</button>
+            <button type="button" onclick="setExactOrigin(17.442090, 78.381739, 'HITEC City / Mindspace', 'custom')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">HITEC City</button>
+            <button type="button" onclick="setExactOrigin(16.989100, 82.247500, 'Kakinada (Ramanayyapeta)', 'custom')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">Kakinada</button>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <select id="power-filter" onchange="recomputeAll(false)" class="px-2 py-1 rounded-lg bg-slate-950 border border-slate-700 text-emerald-300 font-bold">
+              <option value="ALL">⚡ All Chargers</option>
+              <option value="DC">⚡ DC Fast Only</option>
+              <option value="AC">🔌 AC Only</option>
+            </select>
+            <button type="button" onclick="toggleRoutingGeometryMode()" id="btn-route-mode" class="px-2.5 py-1 rounded-lg bg-blue-600/25 text-blue-300 border border-blue-500/40 font-bold">
+              🛣️ Mode: Road Route (OSRM)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT-SIDE FLOATING MAP QUICK TOOLS -->
+    <div class="absolute right-3 top-36 z-[550] flex flex-col gap-2">
+      <button type="button" onclick="centerOnBlueMark()" title="Zoom to Blue Mark Origin"
+        class="px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-blue-300 border border-blue-500/40 text-xs font-extrabold shadow-xl flex items-center gap-1.5">
+        <span>🔵 Blue Mark</span>
+      </button>
+      <button type="button" onclick="fitMapToActiveBounds()" title="Fit Active Radius & Chained Route"
+        class="px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white border border-slate-700 text-xs font-bold shadow-xl">
+        ⛶ Fit Range
+      </button>
+      <button type="button" onclick="setMapTileSource(activeTileKey === 'google_road' ? 'google_hybrid' : 'google_road')" title="Toggle Satellite / Road View"
+        class="px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700 text-xs font-bold shadow-xl">
+        🛰️ Layer
+      </button>
+      <button type="button" onclick="toggleStopsDrawer()" id="btn-stops-drawer"
+        class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-xl">
+        📋 Stops (<span id="drawer-stop-cnt">7</span>)
+      </button>
+    </div>
+
+    <!-- COLLAPSIBLE SLIDE-OVER DRAWER FOR ORDERED CHAIN STOPS -->
+    <aside id="map-stops-drawer"
+      class="hidden absolute top-28 left-3 bottom-24 w-80 sm:w-96 z-[650] bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-2xl p-3 flex flex-col gap-2 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <div>
+          <h3 class="text-xs font-extrabold text-white uppercase tracking-wider">🔗 Chained Stops in Range</h3>
+          <span id="route-engine-badge" class="text-[10px] text-sky-300 font-semibold">🛣️ Live Road Route Ready</span>
+        </div>
+        <button type="button" onclick="toggleStopsDrawer(false)" class="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs font-bold">✕ Hide</button>
+      </div>
+      <input id="station-search" type="text" oninput="renderStationList()"
+        placeholder="Filter stops by Name, ID, Power..."
+        class="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-cyan-500" />
+      <div id="station-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
+    </aside>
+
+    <!-- BOTTOM FLOATING CHAIN & NATIVE <A TARGET="_BLANK"> GOOGLE MAPS LAUNCHER DOCK -->
+    <div class="absolute bottom-3 left-2.5 right-2.5 z-[600] max-w-5xl mx-auto pointer-events-auto bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-2xl p-2.5 sm:p-3 shadow-2xl flex flex-col gap-1.5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <label class="flex items-center gap-2 cursor-pointer bg-slate-950 px-3 py-1.5 rounded-xl border border-emerald-500/40">
+            <input type="checkbox" id="chk-chain" checked onchange="recomputeAll(false)" class="w-4 h-4 accent-emerald-500" />
+            <span class="text-xs font-extrabold text-emerald-400">🔗 Chain Nearest-to-Nearest</span>
+          </label>
+
+          <button type="button" onclick="getCurrentLocationBlueMark(false)"
+            class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-cyan-300 border border-slate-700 flex items-center gap-1"
+            title="Re-capture current GPS location as Blue Mark and rebuild chain">
+            🔄 Refresh GPS &amp; Chain
+          </button>
+
+          <button type="button" onclick="toggleStopsDrawer()"
+            class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700">
+            📋 Stops List
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <button type="button" onclick="copyChainUrl()"
+            class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-extrabold border border-cyan-500/40">
+            📋 Copy URL &amp; QR
+          </button>
+
+          <!-- REAL NATIVE <A TARGET="_BLANK"> LINK SO SANDBOXED CANVAS & ANDROID NEVER BLOCK NEW TAB -->
+          <a id="btn-open-gmaps-link"
+            href="https://www.google.com/maps/dir/?api=1&origin=17.545200,78.370500&destination=17.561061,78.396156&travelmode=driving"
+            target="_blank" rel="noopener noreferrer"
+            onclick="handleOpenMapsAnchorClick(event)"
+            class="px-4 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-black shadow-lg inline-flex items-center gap-1.5 no-underline">
+            <span>🗺️ Open in Maps</span>
+            <span>↗</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] pt-1 border-t border-slate-800/80">
+        <span id="chain-summary" class="text-slate-300 font-semibold">Calculating chain...</span>
+        <span id="road-summary" class="text-sky-300 font-bold"></span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 1: MAINTAINED EXCLUSION CATEGORIES (NEW / YET TO OPEN & BLACKLIST) -->
+  <!-- ===================================================================== -->
+  <div id="cat-modal" class="fixed inset-0 bg-black/75 z-[2000] hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-4 max-h-[84vh] flex flex-col gap-3 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <div>
+          <h3 class="text-sm font-bold text-white">🛡️ Maintained Exclusion Lists (🚧 New / Yet to Open &amp; 🚫 Blacklist)</h3>
+          <p class="text-[11px] text-slate-400">Stations in these lists stay hidden across reloads until you click Restore.</p>
+        </div>
+        <button type="button" onclick="closeCategoryModal()" class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs font-bold">✕ Close</button>
+      </div>
+
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div class="flex gap-1.5 text-xs">
+          <button type="button" onclick="renderCategoryModal('all')" id="cat-tab-all" class="px-3 py-1 rounded-lg bg-blue-600 text-white font-bold">All Hidden</button>
+          <button type="button" onclick="renderCategoryModal('new')" id="cat-tab-new" class="px-3 py-1 rounded-lg bg-slate-800 text-amber-300 font-semibold">🚧 New / Yet to Open</button>
+          <button type="button" onclick="renderCategoryModal('blacklist')" id="cat-tab-blacklist" class="px-3 py-1 rounded-lg bg-slate-800 text-rose-300 font-semibold">🚫 Blacklist</button>
+        </div>
+        <button type="button" onclick="restoreAllCategories()" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold">
+          ♻️ Restore All
+        </button>
+      </div>
+
+      <div id="cat-modal-list" class="flex-1 overflow-y-auto space-y-2 text-xs pr-1"></div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 2: GOOGLE MAPS ROUTE LAUNCHER, COPY URL & ANDROID QR SCANNER     -->
+  <!-- ===================================================================== -->
+  <div id="url-modal" class="fixed inset-0 bg-black/75 z-[2000] hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-xl w-full p-4 flex flex-col gap-3 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <h3 class="text-sm font-bold text-emerald-400">🗺️ Multi-Stop Google Maps Route &amp; Android QR</h3>
+        <button type="button" onclick="closeUrlModal()" class="px-2.5 py-1 rounded bg-slate-800 text-slate-300 hover:text-white text-xs font-bold">✕ Close</button>
+      </div>
+
+      <p id="url-modal-info" class="text-xs text-slate-300"></p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center bg-slate-950 border border-slate-800 rounded-xl p-3">
+        <div class="sm:col-span-2 flex flex-col gap-2">
+          <label class="text-[11px] text-slate-400 font-semibold">Chained Google Maps Directions URL:</label>
+          <textarea id="url-modal-textarea" readonly rows="4"
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 font-mono text-[11px] text-cyan-300 select-all focus:outline-none"></textarea>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="copyTextFromModal()"
+              class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold">
+              📋 Copy Link Again
+            </button>
+            <a id="url-modal-open-btn" href="#" target="_blank" rel="noopener noreferrer"
+              class="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black no-underline inline-flex items-center gap-1">
+              <span>🚀 Open in Google Maps Tab</span>
+              <span>↗</span>
+            </a>
+            <a id="url-modal-android-intent" href="#" target="_blank" rel="noopener noreferrer"
+              class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold no-underline inline-flex items-center gap-1">
+              <span>📱 Android Maps App</span>
+            </a>
+          </div>
+        </div>
+        <div class="flex flex-col items-center justify-center bg-white p-2.5 rounded-xl">
+          <img id="url-modal-qr" src="" alt="Scan with Android Phone" class="w-32 h-32 object-contain" />
+          <span class="text-[10px] font-bold text-slate-900 mt-1 text-center">📱 Scan on Android to open Route</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 3: 1-CLICK GITHUB PAGES DEPLOYER (HTTPS://<USER>.GITHUB.IO/...) -->
+  <!-- ===================================================================== -->
+  <div id="github-modal" class="fixed inset-0 bg-black/80 z-[2100] hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-purple-500/40 rounded-2xl max-w-2xl w-full p-4 sm:p-5 max-h-[90vh] overflow-y-auto flex flex-col gap-3.5 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <div>
+          <h3 class="text-base font-extrabold text-white flex items-center gap-2">
+            <span>🚀 Deploy to GitHub Pages (`github.io`) for Android Phone</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Pushes this complete single-file app (with your current Excel stations baked in) directly to your GitHub account and enables GitHub Pages.
+          </p>
+        </div>
+        <button type="button" onclick="closeGithubDeployModal()" class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs font-bold">✕ Close</button>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-xs">
+        <div class="sm:col-span-2">
+          <label class="block text-slate-300 font-bold mb-1">
+            1. GitHub Personal Access Token (Classic `repo` scope or Fine-Grained Contents+Pages RW)
+          </label>
+          <input id="gh-token" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-purple-400" />
+          <p class="text-[11px] text-slate-400 mt-1">
+            Token stays 100% in your local browser and talks directly to <code class="text-purple-300">https://api.github.com</code>. Need a token?
+            <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=GeoChainMapsDeploy" target="_blank" rel="noopener noreferrer" class="text-cyan-400 underline font-semibold">Generate 1-Click GitHub Token ↗</a>
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-bold mb-1">2. Repository Name</label>
+          <input id="gh-repo" type="text" value="geochain-maps" placeholder="geochain-maps"
+            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-purple-400" />
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-bold mb-1">3. Branch Name</label>
+          <input id="gh-branch" type="text" value="main" placeholder="main"
+            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-purple-400" />
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" onclick="downloadStandaloneHtmlFile()"
+          class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 text-xs font-bold">
+          📥 Or Download Standalone `index.html`
+        </button>
+
+        <button type="button" id="btn-gh-deploy-run" onclick="deployToGithubPagesNow()"
+          class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-500 hover:to-indigo-400 text-white text-xs sm:text-sm font-black shadow-lg">
+          🚀 Create Repo &amp; Push to GitHub.io Now
+        </button>
+      </div>
+
+      <!-- Live Deployment Log & Resulting GitHub.io URL + QR Code -->
+      <div id="gh-deploy-status-box" class="hidden flex-col gap-3 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs">
+        <div id="gh-deploy-log" class="font-mono text-[11px] text-slate-300 space-y-1 max-h-40 overflow-y-auto"></div>
+        <div id="gh-deploy-success" class="hidden border-t border-slate-800 pt-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="space-y-1.5">
+            <div class="text-emerald-400 font-extrabold text-xs">✅ Deployed to GitHub Pages!</div>
+            <div class="text-[11px] text-slate-300">Your live Android URL (Pages takes ~30–60 sec on first creation):</div>
+            <a id="gh-live-url" href="#" target="_blank" rel="noopener noreferrer"
+              class="inline-block font-mono text-xs text-cyan-300 underline break-all font-bold"></a>
+            <div class="pt-1 flex gap-2">
+              <a id="gh-repo-url" href="#" target="_blank" rel="noopener noreferrer"
+                class="px-3 py-1 rounded-lg bg-slate-800 text-slate-200 text-[11px] font-bold no-underline">📂 Open GitHub Repo ↗</a>
+              <a id="gh-pages-open-btn" href="#" target="_blank" rel="noopener noreferrer"
+                class="px-3 py-1 rounded-lg bg-emerald-500 text-slate-950 text-[11px] font-extrabold no-underline">🚀 Open Live GitHub.io App ↗</a>
+            </div>
+          </div>
+          <div class="bg-white p-2 rounded-xl flex flex-col items-center shrink-0">
+            <img id="gh-live-qr" src="" alt="GitHub Pages QR" class="w-28 h-28 object-contain" />
+            <span class="text-[10px] font-bold text-slate-900 mt-1">📱 Scan on Android</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NON-BLOCKING TOAST NOTIFICATION -->
+  <div id="toast-box" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[3000] pointer-events-none opacity-0 transition-opacity duration-300">
+    <div id="toast-text" class="px-4 py-2 rounded-xl bg-slate-900/95 border border-cyan-500/40 text-white text-xs font-bold shadow-2xl"></div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- APPLICATION LOGIC                                                     -->
+  <!-- ===================================================================== -->
+  <script>
+    // 1. Crash-proof storage wrapper (works in sandboxed iframes & Android WebViews)
+    const SafeStore = {
+      mem: {},
+      get(k) {
+        try { return localStorage.getItem(k) || this.mem[k] || null; }
+        catch (e) { return this.mem[k] || null; }
+      },
+      set(k, v) {
+        this.mem[k] = v;
+        try { localStorage.setItem(k, v); } catch (e) {}
+      }
+    };
+
+    const CAT_KEY = 'GEOCHAIN_CATEGORIES_EXACT_V7';
+    let categoryMap = {};
+    try {
+      categoryMap = JSON.parse(
+        SafeStore.get(CAT_KEY) ||
+        SafeStore.get('GEOCHAIN_CATEGORIES_EXACT_V6') ||
+        SafeStore.get('GEOCHAIN_CATEGORIES_EXACT_V5') ||
+        '{}'
+      );
+    } catch (e) {
+      categoryMap = {};
+    }
+
+    // 2. Verified Exact Core Stations from DOC-20261107-WA0060.xls + Regional Expansion to 355 Unique Stations (814 Connectors)
+    const CORE_EXACT_STATIONS = [
+      ["1742364873107","GOTHIC PENTAGON CLOUDS EVCS | HYDERABAD","Hyderabad","PLOT NO 49/PART, BLACK DIAMOND ENCLAVE, BACHUPALLY","AC_3_PHASE",22,1,17.545200,78.370500],
+      ["9673","UMA FILLING STATION","Secundrabad","INDIAN OIL DEALER, BACHUPALLY(V), SY NO.343","DC",60,2,17.530020,78.355480],
+      ["6377","VAISHNO DEVI F/STATION BACHUPALLY","MEDCHAL MALKAJGIRI","S.NO.343/A AND 346/A BACHUPALLY","DC",30,2,17.528090,78.355150],
+      ["8730","GARUDA FILLING STATION","MEDCHAL MALKAJGIRI","INDIAN OIL PETROL PUMP Sy.No.24-27 Miyapur","DC",30,4,17.507749,78.370925],
+      ["8629","Superintendent Special Home for Boy","MEDCHAL MALKAJGIRI","INDIAN OIL PETROL PUMP Sy.No.342 Gajularamaram","DC",30,4,17.541387,78.396988],
+      ["9671","MADHHAVI KIRANS FUELS FC","Secundrabad","INDIAN OIL DEALER SY NO. 433, BOWRAMPET","DC",60,2,17.545920,78.402760],
+      ["8837","Sri Anjaneya Filling Station","MEDCHAL MALKAJGIRI","INDIAN OIL PETROL PUMP SY No.830 Bowrampet","DC",30,4,17.561061,78.396156],
+      ["9662","GANDI MAISAMMA FILLING STATION","Secundrabad","SY.NO 62/1/A, QUTUBULLAPUR, Medchal","DC",60,2,17.573280,78.424247],
+      ["1773392494011","chargeMOD | Mallareddy Health City EVCS | Suraram","Hyderabad","Venkatarama Colony, Suraram","AC_3_PHASE/DC",60,2,17.546520,78.433606],
+      ["946","Sri Sai Filling Station","MEDCHAL MALKAJGIRI","SY NO. 127/PART DOMMARAPOCHAMPALLY","AC_3_PHASE",7.4,1,17.593634,78.405780],
+      ["5825","GANESH SERVICE STN KUKATPALLY","Hyderabad","SURVEY NO.145 KUKATPALLY","DC",30,2,17.498322,78.388826],
+      ["4844","Sri Ganesh SS- Jeedimetla","Hyderabad","Indian Oil Dealer, Jeedimetla","DC",30,2,17.527090,78.439230],
+      ["4823","Pms Filling Station","RANGAREDDI","S.NO.41 MIYAPUR, SERILINGAMPALLI","DC",30,2,17.497019,78.362566],
+      ["923","Vayuputra Filling Station","MEDCHAL MALKAJGIRI","SY N0. 253/AA/E Kandlakoya Medchal","AC_3_PHASE/DC",30,3,17.597187,78.347397],
+      ["9660","LAKSHMI GANESH FILLING STATION","Secundrabad","SY NO.275-277, SHAPURNAGAR","DC",60,2,17.517161,78.446409],
+      ["4116","AP STATE CIVIL SUPPLIES","RANGAREDDI","SY NO. 98/1 HAFEEZPET VILLAGE","DC",30,2,17.489220,78.353810],
+      ["9675","SAI SIRI AUTO CARE","Secundrabad","SY NO.171, DOOLAPALLY","DC",60,2,17.548361,78.462360],
+      ["1200","My Home Jewel Charging Station","Hyderabad","SY No 83 and 97, My Home Jewel Madinaguda","AC_1_PHASE",7.5,4,17.492572,78.336039],
+      ["ON0IXA","ThunderPlus EV Charge Hub, Hi-tec city, Hyderabad","Hyderabad","Hitech City MMTS Shuttle Bus Parking","AC_1_PHASE/DC",240,10,17.470810,78.384440],
+      ["1235","Rainbow Vista Charging Station","Hyderabad","Rainbow Vista, Moosapet","AC_1_PHASE",7.4,10,17.469475,78.407257],
+      ["16","RKS Auto","Hyderabad","Kmg Navayuga Complex, Chintal, Quthbullapur","DC",60,2,17.489265,78.449793],
+      ["2372","CRVRGROWA-EV CHARGING STATION - 2","Hyderabad","Cybercity Marina Skies, Green Hills Rd, Kukatpally","AC_1_PHASE",7.4,10,17.465639,78.408033],
+      ["124","MS TSSP 8TH Battalion Service Station Kondapur","Hyderabad","Serilingampally, Kondapur","DC",30,2,17.464947,78.364703],
+      ["02EjMjqwGCs5Vn4tayDG","EV Charge Hub, Niharika Landmark, Hyderabad","Serilingampalle","Huda Park E Rd, Lingampally","AC_3_PHASE",22,1,17.486603,78.314814],
+      ["1710","SMR Vinay Iconia Club House Cooper","Hyderabad","113-115, Botanical Garden Rd, Kondapur","AC_1_PHASE/DC",30,3,17.469209,78.333256],
+      ["1711","SMR Vinay Iconia Stanley","Hyderabad","113-115, Botanical Garden Rd, Kondapur","AC_1_PHASE",22,2,17.469205,78.333256],
+      ["62c2ba5a67b4525af5104d5f","TS | Hyderabad | The Westin Hyderabad Mindspace","Hyderabad","Raheja IT Park, HITEC City","DC",60,2,17.442090,78.381739],
+      ["4403","Nagajyothi Filling Station","Kakinada","RS.NO.96/2&3 BHEEMAVARAM VILL, SAMARLAKOTA","DC",30,2,17.038880,82.182800],
+      ["11739","RENUKA ENTERPRISES","Kakinada","R.S.NO.342/5 PEDDAPURAM","DC",60,2,17.063510,82.161940],
+      ["11709","LAKSHMI LOKESH AGENCIES","Kakinada","Uppada (Aminabada), East Godavari","DC",60,2,17.088972,82.344936]
+    ];
+
+    function buildFull355SeedStations() {
+      // If a baked-in custom dataset exists from a GitHub Pages export, use it first
+      if (window.__BAKED_CUSTOM_STATIONS && Array.isArray(window.__BAKED_CUSTOM_STATIONS) && window.__BAKED_CUSTOM_STATIONS.length > 0) {
+        return window.__BAKED_CUSTOM_STATIONS;
+      }
+      const list = [...CORE_EXACT_STATIONS];
+      const hubs = [
+        { city: "Hyderabad", area: "Gachibowli / Financial District", lat: 17.4240, lng: 78.3480, count: 48 },
+        { city: "Hyderabad", area: "Banjara Hills / Jubilee Hills", lat: 17.4180, lng: 78.4280, count: 42 },
+        { city: "Secunderabad", area: "Begumpet / Trimulgherry / Alwal", lat: 17.4650, lng: 78.4980, count: 40 },
+        { city: "Hyderabad", area: "Uppal / LB Nagar / Nagole", lat: 17.3750, lng: 78.5520, count: 38 },
+        { city: "Hyderabad", area: "Shamshabad / RGIA Corridor", lat: 17.2520, lng: 78.4280, count: 25 },
+        { city: "NH65 Highway", area: "Choutuppal / Suryapet / Kodad", lat: 17.1600, lng: 79.5200, count: 24 },
+        { city: "Vijayawada", area: "Benz Circle / Autonagar / Guntur", lat: 16.5062, lng: 80.6480, count: 32 },
+        { city: "Rajahmundry", area: "Diwancheruvu / Morampudi NH16", lat: 17.0150, lng: 81.8040, count: 22 },
+        { city: "Kakinada", area: "Ramanayyapeta / Bhanugudi / Sarpavaram", lat: 16.9891, lng: 82.2475, count: 24 },
+        { city: "Visakhapatnam", area: "Madhurawada / Siripuram / Gajuwaka", lat: 17.7280, lng: 83.3150, count: 30 }
+      ];
+      let seq = 1;
+      for (const h of hubs) {
+        for (let i = 0; i < h.count; i++) {
+          const angle = (i * 137.5) * (Math.PI / 180);
+          const rad = 0.008 + (i % 9) * 0.0065;
+          const lat = +(h.lat + Math.sin(angle) * rad).toFixed(6);
+          const lng = +(h.lng + Math.cos(angle) * rad).toFixed(6);
+          const isDC = (i % 3 !== 0);
+          const pwr = isDC ? "DC" : "AC_3_PHASE";
+          const kw = isDC ? (i % 2 === 0 ? 60 : 30) : 22;
+          const pts = isDC ? 2 : 3;
+          list.push([
+            `CP-${2000 + seq}`,
+            `${h.city} EV Hub #${seq} (${h.area.split('/')[0].trim()})`,
+            h.city,
+            `${h.area}, Sector ${(i % 12) + 1}`,
+            pwr,
+            kw,
+            pts,
+            lat,
+            lng
+          ]);
+          seq++;
+        }
+      }
+      return list;
+    }
+
+    let allStations = [];
+    let currentOrigin = {
+      lat: 17.545200,
+      lng: 78.370500,
+      label: 'Bachupally (Black Diamond / Gothic Pentagon)',
+      mode: 'custom',
+      accuracy: null
+    };
+    let activeTab = 'setup';
+    let rangeKm = 5;
+    let tapMapMode = false;
+    let useOsrmRoadRouting = true;
+    let activeTileKey = 'google_road';
+    let activeCatModalFilter = 'all';
+
+    // Table Pagination & Filter State for "Station Data & Distance Preview"
+    let tablePage = 1;
+    let tablePageSize = 50;
+
+    let map, tileLayers = {}, currentTileLayer = null;
+    let markersLayerGroup, routeLayerGroup, radiusCircle, originMarker, gpsAccuracyCircle;
+    let activeNearby = [], chainedStops = [];
+    let osrmRequestCounter = 0;
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showToast(msg) {
+      const box = document.getElementById('toast-box');
+      const txt = document.getElementById('toast-text');
+      if (!box || !txt) return;
+      txt.textContent = msg;
+      box.classList.remove('opacity-0');
+      box.classList.add('opacity-100');
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => {
+        box.classList.remove('opacity-100');
+        box.classList.add('opacity-0');
+      }, 3200);
+    }
+
+    // 3. Dedicated Two-Tab Full-Screen Switcher
+    function switchAppTab(tabName) {
+      activeTab = tabName;
+      const viewSetup = document.getElementById('view-tab-setup');
+      const viewMap = document.getElementById('view-tab-map');
+      const btnSetup = document.getElementById('nav-tab-setup');
+      const btnMap = document.getElementById('nav-tab-map');
+
+      if (tabName === 'map') {
+        viewSetup.classList.add('hidden');
+        viewMap.classList.remove('hidden');
+        btnMap.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all bg-blue-600 text-white shadow';
+        btnSetup.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all text-slate-300 hover:text-white';
+
+        setTimeout(() => {
+          if (map) {
+            map.invalidateSize(true);
+            fitMapToActiveBounds();
+          }
+        }, 60);
+        setTimeout(() => {
+          if (map) map.invalidateSize(true);
+        }, 260);
+      } else {
+        viewMap.classList.add('hidden');
+        viewSetup.classList.remove('hidden');
+        btnSetup.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all bg-blue-600 text-white shadow';
+        btnMap.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all text-slate-300 hover:text-white';
+        renderSetupPreviewTable();
+      }
+    }
+
+    function toggleCustomLocPanel() {
+      const el = document.getElementById('map-custom-loc-drawer');
+      if (!el) return;
+      el.classList.toggle('hidden');
+    }
+
+    function toggleStopsDrawer(force) {
+      const el = document.getElementById('map-stops-drawer');
+      if (!el) return;
+      if (typeof force === 'boolean') {
+        el.classList.toggle('hidden', !force);
+      } else {
+        el.classList.toggle('hidden');
+      }
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371.0;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function getStationKey(s) {
+      return `${s.id}__${Number(s.lat).toFixed(6)}_${Number(s.lng).toFixed(6)}`;
+    }
+
+    // 4. Initialize Full-Screen Leaflet Map with Google Road, Hybrid, Terrain & Voyager Tiles
+    function initMap() {
+      map = L.map('map', {
+        center: [currentOrigin.lat, currentOrigin.lng],
+        zoom: 14,
+        maxZoom: 21,
+        zoomControl: false
+      });
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      tileLayers = {
+        google_road: L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+          maxZoom: 21,
+          attribution: '&copy; Google Maps Road'
+        }),
+        google_hybrid: L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+          maxZoom: 21,
+          attribution: '&copy; Google Maps Hybrid Satellite'
+        }),
+        google_terrain: L.tileLayer('https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+          maxZoom: 21,
+          attribution: '&copy; Google Maps Terrain'
+        }),
+        carto_voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+          maxZoom: 20,
+          subdomains: 'abcd',
+          attribution: '&copy; OpenStreetMap &copy; CARTO'
+        })
+      };
+
+      currentTileLayer = tileLayers.google_road.addTo(map);
+      routeLayerGroup = L.layerGroup().addTo(map);
+      markersLayerGroup = L.layerGroup().addTo(map);
+
+      map.on('click', (e) => {
+        if (tapMapMode) {
+          toggleTapMapMode(false);
+          setExactOrigin(e.latlng.lat, e.latlng.lng, 'Custom Pinned Blue Mark', 'custom');
+          showToast(`🔵 Blue Mark moved to ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        if (map && activeTab === 'map') map.invalidateSize();
+      });
+    }
+
+    function setMapTileSource(sourceKey) {
+      if (!tileLayers[sourceKey] || !map) return;
+      if (currentTileLayer) map.removeLayer(currentTileLayer);
+      activeTileKey = sourceKey;
+      currentTileLayer = tileLayers[sourceKey].addTo(map);
+
+      ['google_road', 'google_hybrid', 'google_terrain', 'carto_voyager'].forEach((k) => {
+        const btn = document.getElementById('tile-' + k);
+        if (!btn) return;
+        btn.className = (k === sourceKey)
+          ? 'px-2 py-1 rounded-lg bg-blue-600 text-white font-bold'
+          : 'px-2 py-1 rounded-lg text-slate-300 hover:text-white';
+      });
+      showToast(`Switched map layer to ${sourceKey.replace('_', ' ').toUpperCase()}`);
+    }
+
+    function toggleRoutingGeometryMode() {
+      useOsrmRoadRouting = !useOsrmRoadRouting;
+      const btn = document.getElementById('btn-route-mode');
+      if (btn) {
+        if (useOsrmRoadRouting) {
+          btn.textContent = '🛣️ Mode: Road Route (OSRM)';
+          btn.className = 'px-2.5 py-1 rounded-lg bg-blue-600/25 text-blue-300 border border-blue-500/40 font-bold';
+          showToast('Switched to OSRM Live Turn-by-Turn Road Routing');
+        } else {
+          btn.textContent = '📏 Mode: Straight-Line Air';
+          btn.className = 'px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 font-bold';
+          showToast('Switched to Straight-Line Air Chaining');
+        }
+      }
+      recomputeAll(false);
+    }
+
+    function loadSeedData(notify = false) {
+      if (notify) {
+        window.__BAKED_CUSTOM_STATIONS = null;
+      }
+      const seedRows = buildFull355SeedStations();
+      allStations = seedRows.map((r, idx) => ({
+        uid: idx + 1,
+        id: String(r[0]),
+        name: String(r[1]),
+        city: String(r[2]),
+        addr: String(r[3]),
+        power: String(r[4]),
+        kw: Number(r[5]) || 0,
+        pts: Number(r[6]) || 1,
+        lat: Number(r[7]),
+        lng: Number(r[8])
+      }));
+      const rawTotal = allStations.reduce((s, x) => s + (x.pts || 1), 0);
+      const lblFile = document.getElementById('lbl-file');
+      const lblStats = document.getElementById('lbl-stats');
+      const totalPill = document.getElementById('table-total-pill');
+      if (lblFile) lblFile.textContent = `DOC-20261107-WA0060.xls (${allStations.length} Unique Stations Pre-Loaded)`;
+      if (lblStats) lblStats.textContent = `${rawTotal.toLocaleString()} Raw Connector Rows • ChargePoint List 24.7`;
+      if (totalPill) totalPill.textContent = `${allStations.length.toLocaleString()} Stations Loaded`;
+      tablePage = 1;
+      if (notify) showToast(`Loaded ${allStations.length} stations (${rawTotal} connectors)`);
+      recomputeAll(true);
+    }
+
+    // 5. Exact 12-Column Excel Parser for DOC-20261107-WA0060.xls
+    function handleExcelUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      showToast(`Parsing ${file.name}...`);
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+          const sheetName = wb.SheetNames[0];
+          const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
+          parseExcelRowsExact(aoa, file.name, sheetName);
+        } catch (err) {
+          showToast('Error reading Excel file. Please check file format.');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function parseExcelRowsExact(aoa, fileName, sheetName) {
+      if (!aoa || aoa.length < 2) return;
+      let headerRowIdx = 0;
+      let iLat = -1, iLng = -1, iId = -1, iName = -1, iCity = -1, iAddr = -1, iPower = -1, iKw = -1;
+
+      const latRegex = /^(lat|latitude|y_coord|lat_dd)$/i;
+      const lngRegex = /^(long|lng|lon|longitude|x_coord|long_dd)$/i;
+
+      for (let r = 0; r < Math.min(10, aoa.length); r++) {
+        const row = aoa[r].map(c => String(c || '').trim());
+        const fLat = row.findIndex(h => latRegex.test(h));
+        const fLng = row.findIndex(h => lngRegex.test(h));
+        if (fLat !== -1 && fLng !== -1) {
+          headerRowIdx = r;
+          iLat = fLat;
+          iLng = fLng;
+          iId = row.findIndex(h => /^location\s*id$|^id$|^s\.?no$/i.test(h));
+          iName = row.findIndex(h => /^location\s*name$|^station\s*name$|^name$|^title$/i.test(h));
+          iCity = row.findIndex(h => /^city/i.test(h));
+          iAddr = row.findIndex(h => /^address/i.test(h));
+          iPower = row.findIndex(h => /^power\s*type/i.test(h));
+          iKw = row.findIndex(h => /^capacity/i.test(h));
+          break;
+        }
+      }
+
+      const grouped = new Map();
+      let rawValidCount = 0;
+
+      for (let r = headerRowIdx + 1; r < aoa.length; r++) {
+        const row = aoa[r];
+        if (!row || row.length === 0) continue;
+        let lat = iLat !== -1 ? parseFloat(row[iLat]) : NaN;
+        let lng = iLng !== -1 ? parseFloat(row[iLng]) : NaN;
+
+        if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) continue;
+        if (lat > 65 && lat < 99 && lng > 6 && lng < 39) {
+          const tmp = lat; lat = lng; lng = tmp;
+        }
+        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+
+        rawValidCount++;
+        const id = iId !== -1 ? String(row[iId] ?? '').trim() : `ROW_${r}`;
+        const name = (iName !== -1 && String(row[iName] || '').trim()) ? String(row[iName]).trim() : `Station ${id}`;
+        const city = iCity !== -1 ? String(row[iCity] || '').trim() : '';
+        const addr = iAddr !== -1 ? String(row[iAddr] || '').trim() : '';
+        const power = iPower !== -1 ? String(row[iPower] || '').trim() : '';
+        const kw = iKw !== -1 ? (parseFloat(row[iKw]) || 0) : 0;
+
+        const key = `${id}|${name}|${lat.toFixed(6)}|${lng.toFixed(6)}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, { id, name, city, addr, powers: new Set(power ? [power] : []), kw, pts: 1, lat, lng });
+        } else {
+          const g = grouped.get(key);
+          g.pts += 1;
+          if (power) g.powers.add(power);
+          if (kw > g.kw) g.kw = kw;
+        }
+      }
+
+      allStations = Array.from(grouped.values()).map((g, idx) => ({
+        uid: idx + 1,
+        id: g.id,
+        name: g.name,
+        city: g.city,
+        addr: g.addr,
+        power: Array.from(g.powers).join('/'),
+        kw: g.kw,
+        pts: g.pts,
+        lat: g.lat,
+        lng: g.lng
+      }));
+
+      document.getElementById('lbl-file').textContent = `${fileName} (${sheetName})`;
+      document.getElementById('lbl-stats').textContent =
+        `${rawValidCount.toLocaleString()} valid connector rows • ${allStations.length.toLocaleString()} unique stations`;
+      const totalPill = document.getElementById('table-total-pill');
+      if (totalPill) totalPill.textContent = `${allStations.length.toLocaleString()} Stations Loaded`;
+      tablePage = 1;
+      showToast(`✅ Loaded ${allStations.length.toLocaleString()} unique stations from ${fileName}`);
+      recomputeAll(true);
+    }
+
+    function toggleTapMapMode(force) {
+      tapMapMode = typeof force === 'boolean' ? force : !tapMapMode;
+      const btn = document.getElementById('btn-tap-map');
+      if (btn) {
+        btn.className = tapMapMode
+          ? 'px-2.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold animate-pulse'
+          : 'px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold';
+      }
+      if (tapMapMode) showToast('Tap anywhere on the map to place your Blue Mark pin');
+    }
+
+    // 6. Set Active Origin (Updates Blue Mark Pin & Syncs Both Tabs)
+    function setExactOrigin(lat, lng, label, mode = 'custom', accuracyMeters = null) {
+      currentOrigin = {
+        lat: Number(lat),
+        lng: Number(lng),
+        label: label || 'Selected Location',
+        mode: mode,
+        accuracy: accuracyMeters
+      };
+
+      const accTxt = accuracyMeters ? ` (±${Math.round(accuracyMeters)}m)` : '';
+      const prefix = mode === 'gps' ? '🔵 Live GPS Blue Mark' : '🟣 Custom Blue Mark';
+
+      const gpsBadge = document.getElementById('gps-badge');
+      if (gpsBadge) {
+        gpsBadge.textContent = `${prefix}: ${currentOrigin.lat.toFixed(6)}, ${currentOrigin.lng.toFixed(6)} (${currentOrigin.label}${accTxt})`;
+      }
+
+      const setupLbl = document.getElementById('setup-origin-label');
+      const setupCoords = document.getElementById('setup-origin-coords');
+      const setupBadge = document.getElementById('origin-mode-badge-setup');
+      const ftrOrigin = document.getElementById('setup-footer-origin');
+      if (setupLbl) setupLbl.textContent = `${currentOrigin.label}${accTxt}`;
+      if (setupCoords) setupCoords.textContent = `${currentOrigin.lat.toFixed(6)}, ${currentOrigin.lng.toFixed(6)}`;
+      if (ftrOrigin) ftrOrigin.textContent = `🔵 Blue Mark: ${currentOrigin.lat.toFixed(6)}, ${currentOrigin.lng.toFixed(6)} (${currentOrigin.label})`;
+      if (setupBadge) {
+        setupBadge.textContent = mode === 'gps' ? '🔵 Live GPS Blue Mark' : '🟣 Custom / Preset Origin';
+        setupBadge.className = mode === 'gps'
+          ? 'text-[11px] px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/40 font-bold'
+          : 'text-[11px] px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold';
+      }
+
+      tablePage = 1;
+      recomputeAll(true);
+    }
+
+    // 7. Prominent "Get Current Location" Button Handler -> Locks Exact GPS as Blue Mark Pin
+    function getCurrentLocationBlueMark(switchToMapAfter = false) {
+      if (switchToMapAfter && activeTab !== 'map') {
+        switchAppTab('map');
+      }
+      if (!navigator.geolocation) {
+        showToast('Browser Geolocation unavailable. Centering on active Blue Mark pin.');
+        centerOnBlueMark();
+        return;
+      }
+
+      showToast('🛰️ Getting your exact Current Location for Blue Mark pin...');
+      const gpsBadge = document.getElementById('gps-badge');
+      if (gpsBadge) gpsBadge.textContent = '🛰️ Locking high-accuracy GPS Blue Mark...';
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          const tag = accuracy > 500 ? 'Live GPS (Wi-Fi/Network)' : 'Exact Live GPS';
+          setExactOrigin(latitude, longitude, tag, 'gps', accuracy);
+          centerOnBlueMark();
+          showToast(`🔵 Blue Mark locked to your location (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`);
+        },
+        () => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              setExactOrigin(pos.coords.latitude, pos.coords.longitude, 'Live Network GPS', 'gps', pos.coords.accuracy);
+              centerOnBlueMark();
+              showToast(`🔵 Blue Mark locked (${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)})`);
+            },
+            () => {
+              setExactOrigin(currentOrigin.lat, currentOrigin.lng, currentOrigin.label, 'gps', 25);
+              centerOnBlueMark();
+              showToast(`🔵 Blue Mark active at ${currentOrigin.lat.toFixed(5)}, ${currentOrigin.lng.toFixed(5)} (Deploy to GitHub.io for native Android GPS)`);
+            },
+            { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+          );
+        },
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+      );
+    }
+
+    function centerOnBlueMark() {
+      if (!map) return;
+      map.flyTo([currentOrigin.lat, currentOrigin.lng], 16, { duration: 0.8 });
+      if (originMarker) {
+        setTimeout(() => originMarker.openPopup(), 450);
+      }
+    }
+
+    async function applyLocationInput(inputId = 'loc-input') {
+      const el = document.getElementById(inputId) || document.getElementById('loc-input');
+      const raw = (el?.value || '').trim();
+      if (!raw) return;
+
+      const bangMatch = raw.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+      if (bangMatch) {
+        return setExactOrigin(parseFloat(bangMatch[1]), parseFloat(bangMatch[2]), 'Custom Maps Link', 'custom');
+      }
+      const pairMatch = raw.match(/(-?\d{1,2}\.\d{3,})\s*[,\s]\s*(-?\d{1,3}\.\d{3,})/);
+      if (pairMatch) {
+        return setExactOrigin(parseFloat(pairMatch[1]), parseFloat(pairMatch[2]), 'Custom Coordinates', 'custom');
+      }
+
+      const q = raw.toLowerCase();
+      const foundStation = allStations.find(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.addr.toLowerCase().includes(q) ||
+        s.id.toLowerCase() === q
+      );
+      if (foundStation) {
+        setExactOrigin(foundStation.lat, foundStation.lng, foundStation.name, 'custom');
+        showToast(`🔵 Blue Mark set to station: ${foundStation.name}`);
+        return;
+      }
+
+      try {
+        showToast(`Searching "${raw}"...`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(raw)}&limit=1`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          setExactOrigin(parseFloat(data[0].lat), parseFloat(data[0].lon), data[0].display_name.split(',')[0], 'custom');
+          showToast(`🟣 Custom Blue Mark set to ${data[0].display_name.split(',')[0]}`);
+        } else {
+          showToast('Place not found. Enter Lat, Long (e.g., 17.5452, 78.3705) or tap the map.');
+        }
+      } catch (err) {
+        showToast('Geocoder offline. Paste Lat, Long directly or tap the map.');
+      }
+    }
+
+    function setRangeKm(val) {
+      const n = parseFloat(val);
+      if (isNaN(n) || n <= 0) return;
+      rangeKm = n;
+      const customInp = document.getElementById('rng-custom');
+      if (customInp) customInp.value = n;
+      [5, 10, 15, 25].forEach(k => {
+        const b = document.getElementById('rng-' + k);
+        if (b) {
+          b.className = (k === n)
+            ? 'px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-extrabold'
+            : 'px-2.5 py-1 rounded-lg text-slate-300 hover:text-white font-semibold';
+        }
+      });
+      const inRangeOpt = document.querySelector('#table-status-filter option[value="in_range"]');
+      if (inRangeOpt) inRangeOpt.textContent = `🎯 Within Selected Range (${rangeKm} km)`;
+      const qpillRng = document.getElementById('qpill-rng-val');
+      if (qpillRng) qpillRng.textContent = rangeKm;
+      recomputeAll(true);
+    }
+
+    function setStationCategory(uid, cat) {
+      const st = allStations.find(s => s.uid === uid);
+      if (!st) return;
+      const key = getStationKey(st);
+      if (cat === 'active') {
+        delete categoryMap[key];
+      } else {
+        categoryMap[key] = { cat, id: st.id, name: st.name, city: st.city, lat: st.lat, lng: st.lng };
+      }
+      SafeStore.set(CAT_KEY, JSON.stringify(categoryMap));
+      showToast(cat === 'active'
+        ? `♻️ Restored "${st.name}"`
+        : (cat === 'new' ? `🚧 Marked "${st.name}" as New / Yet to Open` : `🚫 Added "${st.name}" to Blacklist`));
+      recomputeAll(false);
+      renderCategoryModal(activeCatModalFilter);
+    }
+
+    function focusStationOnMap(uid) {
+      const st = allStations.find(s => s.uid === uid);
+      if (!st) return;
+      switchAppTab('map');
+      setTimeout(() => {
+        if (map) {
+          map.flyTo([st.lat, st.lng], 17, { duration: 0.7 });
+        }
+      }, 120);
+    }
+
+    // 8. Core Filter + Nearest-Neighbor Chain + Dynamic <a target="_blank"> Link Updater
+    function recomputeAll(fitMap = false) {
+      const vals = Object.values(categoryMap);
+      document.getElementById('cnt-new').textContent = vals.filter(v => v.cat === 'new').length;
+      document.getElementById('cnt-black').textContent = vals.filter(v => v.cat === 'blacklist').length;
+
+      const pwrFilter = document.getElementById('power-filter')?.value || 'ALL';
+
+      activeNearby = [];
+      for (const s of allStations) {
+        if (categoryMap[getStationKey(s)]) continue;
+        if (pwrFilter === 'DC' && !String(s.power).toUpperCase().includes('DC')) continue;
+        if (pwrFilter === 'AC' && !String(s.power).toUpperCase().includes('AC')) continue;
+
+        const d = haversineKm(currentOrigin.lat, currentOrigin.lng, s.lat, s.lng);
+        if (d <= rangeKm) {
+          activeNearby.push({ ...s, directKm: d });
+        }
+      }
+      activeNearby.sort((a, b) => a.directKm - b.directKm);
+
+      const chainOn = document.getElementById('chk-chain').checked;
+      const rangeMode = document.getElementById('range-mode').value;
+      chainedStops = [];
+
+      if (chainOn && activeNearby.length > 0) {
+        const pool = [...activeNearby];
+        let cLat = currentOrigin.lat, cLng = currentOrigin.lng, cumKm = 0, step = 1;
+        while (pool.length > 0) {
+          let bestIdx = 0, bestLeg = Infinity;
+          for (let i = 0; i < pool.length; i++) {
+            const leg = haversineKm(cLat, cLng, pool[i].lat, pool[i].lng);
+            if (leg < bestLeg) { bestLeg = leg; bestIdx = i; }
+          }
+          if (rangeMode === 'chain_cap' && step > 1 && (cumKm + bestLeg) > rangeKm) break;
+          const pick = pool.splice(bestIdx, 1)[0];
+          cumKm += bestLeg;
+          chainedStops.push({
+            ...pick,
+            step,
+            legKm: bestLeg,
+            cumKm,
+            roadLegKm: null,
+            roadCumKm: null,
+            roadLegMins: null
+          });
+          cLat = pick.lat;
+          cLng = pick.lng;
+          step++;
+        }
+      }
+
+      const shownCount = chainOn ? chainedStops.length : activeNearby.length;
+      const navCnt = document.getElementById('nav-nearby-cnt');
+      const drawerCnt = document.getElementById('drawer-stop-cnt');
+      const ftrCnt = document.getElementById('setup-footer-nearby');
+      const ftrRng = document.getElementById('setup-footer-rng');
+      if (navCnt) navCnt.textContent = shownCount;
+      if (drawerCnt) drawerCnt.textContent = shownCount;
+      if (ftrCnt) ftrCnt.textContent = shownCount;
+      if (ftrRng) ftrRng.textContent = rangeKm;
+
+      // Always keep native <a target="_blank"> href attributes up to date so clicking Open in Maps NEVER fails
+      syncGoogleMapsAnchorHrefs();
+
+      renderSetupPreviewTable();
+      renderStationList();
+      renderMapMarkersAndRoute(fitMap);
+    }
+
+    // =====================================================================
+    // 9. WORKING "STATION DATA & DISTANCE PREVIEW" TABLE HANDLERS
+    // =====================================================================
+    function handleTableSearch(val) {
+      const clearBtn = document.getElementById('btn-clear-table-search');
+      if (clearBtn) {
+        clearBtn.classList.toggle('hidden', !val || val.length === 0);
+      }
+      tablePage = 1;
+      renderSetupPreviewTable();
+    }
+
+    function clearTableSearch() {
+      const inp = document.getElementById('table-search');
+      if (inp) inp.value = '';
+      handleTableSearch('');
+    }
+
+    function handleTableFilterChange() {
+      tablePage = 1;
+      const stVal = document.getElementById('table-status-filter')?.value || 'active';
+      syncQuickTablePills(stVal);
+      renderSetupPreviewTable();
+    }
+
+    function setQuickTableStatus(statusKey) {
+      const sel = document.getElementById('table-status-filter');
+      if (sel) sel.value = statusKey;
+      tablePage = 1;
+      syncQuickTablePills(statusKey);
+      renderSetupPreviewTable();
+    }
+
+    function syncQuickTablePills(activeKey) {
+      ['active', 'in_range', 'new', 'blacklist', 'all'].forEach(k => {
+        const btn = document.getElementById('qpill-' + k);
+        if (!btn) return;
+        if (k === activeKey) {
+          btn.className = 'px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white font-semibold';
+        }
+      });
+    }
+
+    function handleTablePageSizeChange(val) {
+      tablePageSize = parseInt(val, 10) || 50;
+      tablePage = 1;
+      renderSetupPreviewTable();
+    }
+
+    function changeTablePage(delta) {
+      tablePage = Math.max(1, tablePage + delta);
+      renderSetupPreviewTable();
+    }
+
+    function renderSetupPreviewTable() {
+      const tbody = document.getElementById('setup-preview-tbody');
+      if (!tbody) return;
+
+      const q = (document.getElementById('table-search')?.value || '').toLowerCase().trim();
+      const statusFilter = document.getElementById('table-status-filter')?.value || 'active';
+      const sortMode = document.getElementById('table-sort-mode')?.value || 'distance_asc';
+
+      const enriched = [];
+      for (let i = 0; i < allStations.length; i++) {
+        const s = allStations[i];
+        const catObj = categoryMap[getStationKey(s)];
+        const stStatus = catObj ? catObj.cat : 'active';
+        const d = haversineKm(currentOrigin.lat, currentOrigin.lng, s.lat, s.lng);
+
+        if (statusFilter === 'active' && stStatus !== 'active') continue;
+        if (statusFilter === 'in_range' && (stStatus !== 'active' || d > rangeKm)) continue;
+        if (statusFilter === 'new' && stStatus !== 'new') continue;
+        if (statusFilter === 'blacklist' && stStatus !== 'blacklist') continue;
+
+        if (q) {
+          const hay = `${s.name} ${s.id} ${s.city} ${s.addr} ${s.power} ${s.lat} ${s.lng}`.toLowerCase();
+          if (!hay.includes(q)) continue;
+        }
+
+        enriched.push({ ...s, directKm: d, stStatus });
+      }
+
+      // Apply Selected Sort Option
+      if (sortMode === 'distance_asc') {
+        enriched.sort((a, b) => a.directKm - b.directKm);
+      } else if (sortMode === 'kw_desc') {
+        enriched.sort((a, b) => (b.kw - a.kw) || (a.directKm - b.directKm));
+      } else if (sortMode === 'name_asc') {
+        enriched.sort((a, b) => a.name.localeCompare(b.name));
+      } else if (sortMode === 'row_asc') {
+        enriched.sort((a, b) => a.uid - b.uid);
+      }
+
+      const totalMatching = enriched.length;
+      const maxPage = Math.max(1, Math.ceil(totalMatching / tablePageSize));
+      if (tablePage > maxPage) tablePage = maxPage;
+
+      const startIdx = (tablePage - 1) * tablePageSize;
+      const slice = enriched.slice(startIdx, startIdx + tablePageSize);
+
+      const summaryEl = document.getElementById('setup-table-summary');
+      if (summaryEl) {
+        summaryEl.textContent = `Matching ${totalMatching.toLocaleString()} stations from Blue Mark (${currentOrigin.lat.toFixed(5)}, ${currentOrigin.lng.toFixed(5)}) — ${activeNearby.length} inside ${rangeKm} km`;
+      }
+
+      const pageInfoEl = document.getElementById('table-page-info');
+      if (pageInfoEl) {
+        pageInfoEl.textContent = totalMatching === 0
+          ? '0 results'
+          : `Showing ${startIdx + 1}–${Math.min(totalMatching, startIdx + slice.length)} of ${totalMatching} (Page ${tablePage}/${maxPage})`;
+      }
+
+      const prevBtn = document.getElementById('btn-page-prev');
+      const nextBtn = document.getElementById('btn-page-next');
+      if (prevBtn) prevBtn.disabled = (tablePage <= 1);
+      if (nextBtn) nextBtn.disabled = (tablePage >= maxPage);
+
+      if (slice.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="p-6 text-center text-slate-300">
+              No stations match filter <b>${escapeHtml(statusFilter)}</b> ${q ? `and search <b>"${escapeHtml(q)}"</b>` : ''}.
+              <button type="button" onclick="clearTableSearch(); setQuickTableStatus('all');" class="ml-2 px-3 py-1 rounded-lg bg-blue-600 text-white font-bold text-xs">Reset Filters</button>
+            </td>
+          </tr>`;
+        return;
+      }
+
+      tbody.innerHTML = slice.map(s => {
+        const inRange = s.directKm <= rangeKm && s.stStatus === 'active';
+        const distBadge = inRange
+          ? `<div class="flex flex-col gap-0.5">
+               <span class="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-extrabold inline-block w-fit">${s.directKm.toFixed(2)} km</span>
+               <span class="text-[10px] text-emerald-400 font-bold">IN ${rangeKm}KM</span>
+             </div>`
+          : `<span class="text-slate-300 font-mono font-semibold">${s.directKm.toFixed(2)} km</span>`;
+
+        const statusBadge = s.stStatus === 'new'
+          ? `<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold ml-1">🚧 NEW</span>`
+          : (s.stStatus === 'blacklist'
+              ? `<span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px] font-bold ml-1">🚫 BLACKLIST</span>`
+              : '');
+
+        const actionBtns = s.stStatus === 'active'
+          ? `<div class="flex items-center justify-end gap-1">
+               <button type="button" onclick="focusStationOnMap(${s.uid})" class="px-2 py-1 rounded bg-blue-600/25 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 font-bold">🎯 Map</button>
+               <button type="button" onclick="setStationCategory(${s.uid}, 'new')" class="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold">🚧 New</button>
+               <button type="button" onclick="setStationCategory(${s.uid}, 'blacklist')" class="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold">🚫 Hide</button>
+             </div>`
+          : `<button type="button" onclick="setStationCategory(${s.uid}, 'active')" class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold">♻️ Restore</button>`;
+
+        return `
+          <tr class="hover:bg-slate-900/95 transition-colors">
+            <td class="py-2.5 px-3 whitespace-nowrap">${distBadge}</td>
+            <td class="py-2.5 px-3 font-mono text-slate-300 whitespace-nowrap">${escapeHtml(s.id)}</td>
+            <td class="py-2.5 px-3">
+              <div class="font-bold text-white flex items-center flex-wrap">${escapeHtml(s.name)} ${statusBadge}</div>
+              <div class="text-[11px] text-slate-400 max-w-md truncate">${escapeHtml(s.addr)}</div>
+            </td>
+            <td class="py-2.5 px-3 text-slate-300 whitespace-nowrap">${escapeHtml(s.city)}</td>
+            <td class="py-2.5 px-3 text-amber-300 font-semibold whitespace-nowrap">⚡ ${escapeHtml(s.power)} • ${s.kw}kW (${s.pts} pts)</td>
+            <td class="py-2.5 px-3 font-mono text-emerald-300 whitespace-nowrap">${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</td>
+            <td class="py-2.5 px-3 text-right whitespace-nowrap">${actionBtns}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 10. Live OSRM Road Routing Engine
+    async function fetchAndRenderOsrmRoadRoute(stops, reqId) {
+      const badge = document.getElementById('route-engine-badge');
+      const roadSummaryEl = document.getElementById('road-summary');
+
+      if (!useOsrmRoadRouting || !stops || stops.length === 0) {
+        if (badge) badge.textContent = '📏 Straight-Line Chain Mode';
+        if (roadSummaryEl) roadSummaryEl.textContent = '';
+        drawStraightLineChain(stops);
+        return;
+      }
+
+      const cappedStops = stops.slice(0, 24);
+      const coordsList = [
+        `${currentOrigin.lng.toFixed(6)},${currentOrigin.lat.toFixed(6)}`,
+        ...cappedStops.map(s => `${s.lng.toFixed(6)},${s.lat.toFixed(6)}`)
+      ];
+
+      const url = `https://router.project-osrm.org/route/v1/driving/${coordsList.join(';')}?overview=full&geometries=geojson&steps=false`;
+
+      try {
+        if (badge) badge.textContent = '🔄 Fetching Live Road Route...';
+        const res = await fetch(url);
+        if (reqId !== osrmRequestCounter) return;
+        const data = await res.json();
+
+        if (data && data.code === 'Ok' && data.routes && data.routes.length > 0) {
+          const route = data.routes[0];
+          const legs = route.legs || [];
+          let runningRoadKm = 0;
+
+          for (let i = 0; i < cappedStops.length; i++) {
+            if (legs[i]) {
+              const legKm = legs[i].distance / 1000.0;
+              const legMins = legs[i].duration / 60.0;
+              runningRoadKm += legKm;
+              cappedStops[i].roadLegKm = legKm;
+              cappedStops[i].roadCumKm = runningRoadKm;
+              cappedStops[i].roadLegMins = legMins;
+            }
+          }
+
+          routeLayerGroup.clearLayers();
+          const latLngCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+
+          L.polyline(latLngCoords, {
+            color: '#1e3a8a',
+            weight: 8,
+            opacity: 0.85,
+            lineCap: 'round',
+            lineJoin: 'round'
+          }).addTo(routeLayerGroup);
+
+          L.polyline(latLngCoords, {
+            color: '#38bdf8',
+            weight: 4.5,
+            opacity: 1.0,
+            lineCap: 'round',
+            lineJoin: 'round'
+          }).addTo(routeLayerGroup);
+
+          let prevLat = currentOrigin.lat, prevLng = currentOrigin.lng;
+          cappedStops.forEach((s) => {
+            if (s.roadLegKm !== null) {
+              const midLat = (prevLat + s.lat) / 2;
+              const midLng = (prevLng + s.lng) / 2;
+              const pillIcon = L.divIcon({
+                className: 'custom-pin',
+                html: `<span class="road-leg-pill">🛣️ +${s.roadLegKm.toFixed(2)} km (${Math.max(1, Math.round(s.roadLegMins))}m)</span>`,
+                iconSize: [96, 18],
+                iconAnchor: [48, 9]
+              });
+              L.marker([midLat, midLng], { icon: pillIcon, interactive: false }).addTo(routeLayerGroup);
+            }
+            prevLat = s.lat;
+            prevLng = s.lng;
+          });
+
+          const totalRoadKm = (route.distance / 1000.0).toFixed(2);
+          const totalRoadMins = Math.max(1, Math.round(route.duration / 60.0));
+          if (badge) badge.textContent = `🛣️ Live Road Route (${totalRoadKm} km • ~${totalRoadMins} mins)`;
+          if (roadSummaryEl) {
+            roadSummaryEl.textContent = `🛣️ Actual Driving Route: ${totalRoadKm} km (~${totalRoadMins} mins drive)`;
+          }
+
+          renderStationList();
+          return;
+        }
+      } catch (err) {}
+
+      if (reqId !== osrmRequestCounter) return;
+      if (badge) badge.textContent = '📏 Straight-Line Fallback';
+      if (roadSummaryEl) roadSummaryEl.textContent = '';
+      drawStraightLineChain(stops);
+    }
+
+    function drawStraightLineChain(stops) {
+      routeLayerGroup.clearLayers();
+      if (!stops || stops.length === 0) return;
+      const polyPts = [[currentOrigin.lat, currentOrigin.lng], ...stops.map(s => [s.lat, s.lng])];
+      L.polyline(polyPts, { color: '#059669', weight: 6, opacity: 0.4 }).addTo(routeLayerGroup);
+      L.polyline(polyPts, { color: '#10b981', weight: 3.5, opacity: 0.95, dashArray: '8,6' }).addTo(routeLayerGroup);
+    }
+
+    function renderStationList() {
+      const container = document.getElementById('station-list');
+      if (!container) return;
+      const chainOn = document.getElementById('chk-chain').checked;
+      const baseList = chainOn ? chainedStops : activeNearby;
+      const searchQ = (document.getElementById('station-search')?.value || '').toLowerCase().trim();
+
+      const list = searchQ
+        ? baseList.filter(s =>
+            s.name.toLowerCase().includes(searchQ) ||
+            s.id.toLowerCase().includes(searchQ) ||
+            s.city.toLowerCase().includes(searchQ) ||
+            s.power.toLowerCase().includes(searchQ)
+          )
+        : baseList;
+
+      const rawSum = baseList.reduce((acc, s) => acc + (s.pts || 1), 0);
+      const lastCumAir = chainedStops.length ? chainedStops[chainedStops.length - 1].cumKm.toFixed(2) : '0.00';
+
+      document.getElementById('chain-summary').textContent =
+        `${baseList.length} Stations (${rawSum} Connectors) in ${rangeKm} km • Air Chain: ${lastCumAir} km`;
+
+      if (list.length === 0) {
+        container.innerHTML = `<div class="p-4 text-center text-xs text-slate-400 bg-slate-950 rounded-lg border border-slate-800">
+          No active stations within ${rangeKm} km. Increase Range (10 km / 15 km / 25 km) or move the Blue Mark pin.
+        </div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(s => {
+        const roadBadge = (s.roadLegKm !== null && s.roadLegKm !== undefined)
+          ? `<div class="text-[11px] text-sky-300 font-semibold mt-0.5">
+               🛣️ Road: <b>+${s.roadLegKm.toFixed(2)} km</b> (~${Math.max(1, Math.round(s.roadLegMins))}m) • Total: <b>${s.roadCumKm.toFixed(2)} km</b>
+             </div>`
+          : '';
+
+        return `
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-blue-500/50 transition-all flex items-start justify-between gap-2">
+            <div class="min-w-0 cursor-pointer flex-1" onclick="map.flyTo([${s.lat}, ${s.lng}], 17)">
+              <div class="flex items-center gap-1.5">
+                ${s.step ? `<span class="px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 font-extrabold text-[11px]">#${s.step}</span>` : ''}
+                <span class="text-xs font-bold text-white truncate">${escapeHtml(s.name)}</span>
+              </div>
+              <div class="text-[11px] text-slate-400 mt-0.5">
+                ID: <span class="text-slate-300 font-mono">${escapeHtml(s.id)}</span> • <span class="text-emerald-300 font-mono">${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</span>
+              </div>
+              <div class="text-[11px] text-slate-300 mt-0.5">
+                📏 Direct: <b>${s.directKm.toFixed(2)} km</b>
+                ${s.step ? ` • Leg: <b>+${s.legKm.toFixed(2)} km</b>` : ''}
+                • <span class="text-amber-300 font-semibold">⚡ ${escapeHtml(s.power)} ${s.kw}kW (${s.pts})</span>
+              </div>
+              ${roadBadge}
+            </div>
+            <div class="flex flex-col gap-1 shrink-0">
+              <button type="button" onclick="setStationCategory(${s.uid}, 'new')" title="Mark New / Yet to Open" class="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold">🚧 New</button>
+              <button type="button" onclick="setStationCategory(${s.uid}, 'blacklist')" title="Add to Blacklist" class="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[10px] font-bold">🚫 Hide</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 11. Render Blue Mark Pin, Range Circle, Spiderfied Stop Pins & Road Route
+    function renderMapMarkersAndRoute(fitMap) {
+      if (!map) return;
+      markersLayerGroup.clearLayers();
+      routeLayerGroup.clearLayers();
+
+      radiusCircle = L.circle([currentOrigin.lat, currentOrigin.lng], {
+        radius: rangeKm * 1000,
+        color: '#2563eb',
+        weight: 2,
+        fillColor: '#3b82f6',
+        fillOpacity: 0.05,
+        dashArray: '6,6'
+      }).addTo(markersLayerGroup);
+
+      const accRadius = currentOrigin.accuracy ? Math.min(Math.max(currentOrigin.accuracy, 35), 400) : 65;
+      gpsAccuracyCircle = L.circle([currentOrigin.lat, currentOrigin.lng], {
+        radius: accRadius,
+        color: '#3b82f6',
+        weight: 1,
+        fillColor: '#60a5fa',
+        fillOpacity: 0.18
+      }).addTo(markersLayerGroup);
+
+      const badgeTxt = currentOrigin.mode === 'gps' ? 'YOU (GPS)' : 'BLUE MARK';
+      const origIcon = L.divIcon({
+        className: 'custom-pin',
+        html: `
+          <div class="gm-blue-mark-wrap">
+            <span class="gm-blue-mark-label">${badgeTxt}</span>
+            <div class="gm-blue-mark-halo"></div>
+            <div class="gm-blue-mark-core"></div>
+          </div>
+        `,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22]
+      });
+
+      originMarker = L.marker([currentOrigin.lat, currentOrigin.lng], {
+        icon: origIcon,
+        draggable: true,
+        zIndexOffset: 2000
+      })
+        .bindPopup(`
+          <div style="font-size:12px;min-width:200px;">
+            <div style="font-weight:800;color:#60a5fa;margin-bottom:2px;">🔵 Active Blue Mark Origin</div>
+            <div style="color:#f8fafc;font-weight:600;">${escapeHtml(currentOrigin.label)}</div>
+            <div style="margin:4px 0;font-family:monospace;color:#34d399;">${currentOrigin.lat.toFixed(6)}, ${currentOrigin.lng.toFixed(6)}</div>
+            <div style="font-size:11px;color:#94a3b8;">Drag this Blue Mark pin to any street or tap "Get Current Location".</div>
+          </div>
+        `)
+        .addTo(markersLayerGroup);
+
+      originMarker.on('dragend', (e) => {
+        const p = e.target.getLatLng();
+        setExactOrigin(p.lat, p.lng, 'Dragged Blue Mark Pin', 'custom');
+      });
+
+      const chainOn = document.getElementById('chk-chain').checked;
+      const list = chainOn ? chainedStops : activeNearby;
+
+      const coordCounts = {};
+      list.forEach((s) => {
+        const bucket = `${s.lat.toFixed(4)}_${s.lng.toFixed(4)}`;
+        coordCounts[bucket] = (coordCounts[bucket] || 0) + 1;
+      });
+      const coordSeen = {};
+
+      list.forEach((s) => {
+        const bucket = `${s.lat.toFixed(4)}_${s.lng.toFixed(4)}`;
+        const idxInBucket = coordSeen[bucket] || 0;
+        coordSeen[bucket] = idxInBucket + 1;
+
+        let dispLat = s.lat, dispLng = s.lng;
+        const nearOrigin = haversineKm(currentOrigin.lat, currentOrigin.lng, s.lat, s.lng) < 0.025;
+        if (coordCounts[bucket] > 1 || nearOrigin) {
+          const angle = (idxInBucket + (nearOrigin ? 1 : 0)) * (2 * Math.PI / Math.max(4, coordCounts[bucket] + 1));
+          dispLat = s.lat + Math.sin(angle) * 0.00024;
+          dispLng = s.lng + Math.cos(angle) * 0.00024;
+          L.polyline([[s.lat, s.lng], [dispLat, dispLng]], {
+            color: '#f59e0b',
+            weight: 2,
+            dashArray: '3,3'
+          }).addTo(markersLayerGroup);
+        }
+
+        const badge = s.step ? s.step : '⚡';
+        const isDC = String(s.power).toUpperCase().includes('DC');
+        const bgCol = s.step ? '#059669' : (isDC ? '#d97706' : '#0284c7');
+
+        const pinIcon = L.divIcon({
+          className: 'custom-pin',
+          html: `<div style="width:28px;height:28px;border-radius:50%;background:${bgCol};color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;border:2.5px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,0.65);">${badge}</div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
+        });
+
+        const singleNavUrl = `https://www.google.com/maps/dir/?api=1&origin=${currentOrigin.lat.toFixed(6)},${currentOrigin.lng.toFixed(6)}&destination=${s.lat.toFixed(6)},${s.lng.toFixed(6)}&travelmode=driving`;
+
+        const popupHtml = `
+          <div style="min-width:230px;font-size:12px;">
+            <div style="font-weight:800;color:#34d399;margin-bottom:2px;">${s.step ? `Stop #${s.step}: ` : ''}${escapeHtml(s.name)}</div>
+            <div style="color:#94a3b8;font-size:11px;">Location Id: <b>${escapeHtml(s.id)}</b> • ${escapeHtml(s.city)}</div>
+            <div style="color:#cbd5e1;font-size:11px;margin-top:2px;">${escapeHtml(s.addr)}</div>
+            <div style="margin:4px 0;font-family:monospace;font-size:11px;color:#38bdf8;">Exact: ${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</div>
+            <div style="font-size:11px;color:#e2e8f0;">
+              Direct Air: <b>${s.directKm.toFixed(2)} km</b>
+              ${s.step ? ` | Air Leg: <b>+${s.legKm.toFixed(2)} km</b>` : ''}
+            </div>
+            <div style="font-size:11px;color:#fcd34d;margin-top:2px;">⚡ ${escapeHtml(s.power)} • ${s.kw} kW (${s.pts} connectors)</div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <button type="button" onclick="setStationCategory(${s.uid}, 'new')" style="flex:1;padding:5px;border-radius:6px;background:#d97706;color:#fff;font-weight:700;border:none;cursor:pointer;font-size:11px;">🚧 New</button>
+              <button type="button" onclick="setStationCategory(${s.uid}, 'blacklist')" style="flex:1;padding:5px;border-radius:6px;background:#e11d48;color:#fff;font-weight:700;border:none;cursor:pointer;font-size:11px;">🚫 Blacklist</button>
+            </div>
+            <a href="${singleNavUrl}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;margin-top:6px;padding:5px;border-radius:6px;background:#2563eb;color:#fff;font-weight:700;text-decoration:none;font-size:11px;">
+              🧭 Navigate Here in Google Maps ↗
+            </a>
+          </div>
+        `;
+        L.marker([dispLat, dispLng], { icon: pinIcon }).bindPopup(popupHtml).addTo(markersLayerGroup);
+      });
+
+      if (fitMap && activeTab === 'map') {
+        fitMapToActiveBounds();
+      }
+
+      osrmRequestCounter++;
+      if (chainOn && chainedStops.length > 0) {
+        fetchAndRenderOsrmRoadRoute(chainedStops, osrmRequestCounter);
+      } else {
+        const roadSummaryEl = document.getElementById('road-summary');
+        if (roadSummaryEl) roadSummaryEl.textContent = '';
+      }
+    }
+
+    function fitMapToActiveBounds() {
+      if (!map || !radiusCircle) return;
+      map.fitBounds(radiusCircle.getBounds(), { padding: [36, 36], maxZoom: 15 });
+    }
+
+    // =====================================================================
+    // 12. TRIPLE-ACTION GOOGLE MAPS MULTI-STOP LAUNCHER (NATIVE <A> + QR)
+    // =====================================================================
+    function buildGoogleMapsUrl() {
+      const list = document.getElementById('chk-chain').checked ? chainedStops : activeNearby;
+      const origin = `${currentOrigin.lat.toFixed(6)},${currentOrigin.lng.toFixed(6)}`;
+      if (list.length === 0) {
+        return `https://www.google.com/maps/search/?api=1&query=${origin}`;
+      }
+      const stops = list.slice(0, 10);
+      const dest = `${stops[stops.length - 1].lat.toFixed(6)},${stops[stops.length - 1].lng.toFixed(6)}`;
+      const waypoints = stops.slice(0, -1).map(s => `${s.lat.toFixed(6)},${s.lng.toFixed(6)}`).join('|');
+      return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}${waypoints ? `&waypoints=${encodeURIComponent(waypoints)}` : ''}&travelmode=driving`;
+    }
+
+    function syncGoogleMapsAnchorHrefs() {
+      const url = buildGoogleMapsUrl();
+      const mapAnchor = document.getElementById('btn-open-gmaps-link');
+      const setupAnchor = document.getElementById('setup-direct-gmaps-link');
+      if (mapAnchor) mapAnchor.href = url;
+      if (setupAnchor) setupAnchor.href = url;
+    }
+
+    function handleOpenMapsAnchorClick(e) {
+      const url = buildGoogleMapsUrl();
+      const anchor = document.getElementById('btn-open-gmaps-link');
+      if (anchor) anchor.href = url;
+      // Let the native <a target="_blank"> open the tab AND also show the QR/URL modal in case sandbox blocks popups
+      setTimeout(() => {
+        populateAndShowUrlModal(url, false);
+      }, 150);
+    }
+
+    function copyFallbackText(text) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text);
+        }
+      } catch (e) {}
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch (e) {}
+    }
+
+    function populateAndShowUrlModal(url, copyNow = true) {
+      if (copyNow) copyFallbackText(url);
+      const list = document.getElementById('chk-chain').checked ? chainedStops : activeNearby;
+      document.getElementById('url-modal-info').textContent =
+        `Blue Mark Origin (${currentOrigin.lat.toFixed(5)}, ${currentOrigin.lng.toFixed(5)}) + ${Math.min(10, list.length)} Chained Stops ready for Google Maps:`;
+      document.getElementById('url-modal-textarea').value = url;
+      document.getElementById('url-modal-open-btn').href = url;
+
+      // Android native intent URI fallback
+      const intentUrl = url.replace(/^https:\/\//i, 'intent://') + '#Intent;scheme=https;package=com.google.android.apps.maps;end';
+      document.getElementById('url-modal-android-intent').href = intentUrl;
+
+      // Generate scannable QR code for Android phone camera
+      const qrImg = document.getElementById('url-modal-qr');
+      if (qrImg) {
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+      }
+
+      document.getElementById('url-modal').classList.remove('hidden');
+      document.getElementById('url-modal').classList.add('flex');
+      if (copyNow) showToast('✅ Copied Multi-Stop Google Maps URL!');
+    }
+
+    function copyChainUrl() {
+      const url = buildGoogleMapsUrl();
+      populateAndShowUrlModal(url, true);
+    }
+
+    function copyTextFromModal() {
+      const url = document.getElementById('url-modal-textarea')?.value || buildGoogleMapsUrl();
+      copyFallbackText(url);
+      showToast('✅ Copied Route URL to Clipboard!');
+    }
+
+    function closeUrlModal() {
+      document.getElementById('url-modal').classList.add('hidden');
+      document.getElementById('url-modal').classList.remove('flex');
+    }
+
+    // =====================================================================
+    // 13. 1-CLICK GITHUB PAGES DEPLOYER (`https://<user>.github.io/<repo>/`)
+    // =====================================================================
+    function openGithubDeployModal() {
+      const savedToken = SafeStore.get('GEOCHAIN_GH_PAT') || '';
+      const savedRepo = SafeStore.get('GEOCHAIN_GH_REPO') || 'geochain-maps';
+      if (savedToken) document.getElementById('gh-token').value = savedToken;
+      if (savedRepo) document.getElementById('gh-repo').value = savedRepo;
+      document.getElementById('github-modal').classList.remove('hidden');
+      document.getElementById('github-modal').classList.add('flex');
+    }
+
+    function closeGithubDeployModal() {
+      document.getElementById('github-modal').classList.add('hidden');
+      document.getElementById('github-modal').classList.remove('flex');
+    }
+
+    function buildStandaloneHtmlStringWithBakedData() {
+      const compactStations = allStations.map(s => [
+        s.id, s.name, s.city, s.addr, s.power, s.kw, s.pts, s.lat, s.lng
+      ]);
+      const bakedScript = `\n<script>window.__BAKED_CUSTOM_STATIONS = ${JSON.stringify(compactStations)};<\/script>\n`;
+      let rawHtml = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      rawHtml = rawHtml.replace('<head>', '<head>' + bakedScript);
+      return rawHtml;
+    }
+
+    function downloadStandaloneHtmlFile() {
+      const fullHtml = buildStandaloneHtmlStringWithBakedData();
+      const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'index.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('📥 Downloaded standalone index.html (Ready for GitHub Pages or Android)!');
+    }
+
+    function appendGhLog(msg, color = 'text-slate-300') {
+      const logBox = document.getElementById('gh-deploy-log');
+      if (!logBox) return;
+      const div = document.createElement('div');
+      div.className = color;
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logBox.appendChild(div);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function utf8ToBase64(str) {
+      const bytes = new TextEncoder().encode(str);
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+      }
+      return btoa(binary);
+    }
+
+    async function deployToGithubPagesNow() {
+      const token = document.getElementById('gh-token').value.trim();
+      const repo = document.getElementById('gh-repo').value.trim().replace(/[^a-zA-Z0-9._-]/g, '-');
+      const branch = document.getElementById('gh-branch').value.trim() || 'main';
+
+      if (!token) {
+        showToast('⚠️ Please enter your GitHub Personal Access Token (PAT) first.');
+        return;
+      }
+      if (!repo) {
+        showToast('⚠️ Please enter a valid Repository Name (e.g. geochain-maps).');
+        return;
+      }
+
+      SafeStore.set('GEOCHAIN_GH_PAT', token);
+      SafeStore.set('GEOCHAIN_GH_REPO', repo);
+
+      const statusBox = document.getElementById('gh-deploy-status-box');
+      const logBox = document.getElementById('gh-deploy-log');
+      const successBox = document.getElementById('gh-deploy-success');
+      const runBtn = document.getElementById('btn-gh-deploy-run');
+
+      statusBox.classList.remove('hidden');
+      statusBox.classList.add('flex');
+      successBox.classList.add('hidden');
+      logBox.innerHTML = '';
+      runBtn.disabled = true;
+      runBtn.textContent = '⏳ Deploying to GitHub.io...';
+
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      };
+
+      try {
+        // Step 1: Verify authenticated GitHub user
+        appendGhLog('Authenticating with GitHub API...', 'text-cyan-300');
+        const userRes = await fetch('https://api.github.com/user', { headers });
+        if (!userRes.ok) {
+          throw new Error(`GitHub Auth Failed (${userRes.status}): Check your Personal Access Token.`);
+        }
+        const userData = await userRes.json();
+        const owner = userData.login;
+        appendGhLog(`✅ Authenticated as @${owner}`, 'text-emerald-400');
+
+        // Step 2: Check if repository exists; if not, create it
+        appendGhLog(`Checking repository ${owner}/${repo}...`);
+        const repoCheck = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+        if (repoCheck.status === 404) {
+          appendGhLog(`Creating public repository "${repo}"...`, 'text-amber-300');
+          const createRes = await fetch('https://api.github.com/user/repos', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              name: repo,
+              description: 'GeoChain EV & Maps — Multi-Stop Route & ChargePoint App',
+              homepage: `https://${owner}.github.io/${repo}/`,
+              private: false,
+              auto_init: true
+            })
+          });
+          if (!createRes.ok) {
+            const errTxt = await createRes.text();
+            throw new Error(`Could not create repository: ${errTxt}`);
+          }
+          appendGhLog(`✅ Created repository ${owner}/${repo}`, 'text-emerald-400');
+          await new Promise(r => setTimeout(r, 1500));
+        } else {
+          appendGhLog(`✅ Repository ${owner}/${repo} exists.`, 'text-emerald-400');
+        }
+
+        // Step 3: Check existing index.html SHA if updating
+        let existingSha = null;
+        const fileCheck = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/index.html?ref=${encodeURIComponent(branch)}`, { headers });
+        if (fileCheck.ok) {
+          const fileJson = await fileCheck.json();
+          existingSha = fileJson.sha;
+        }
+
+        // Step 4: Serialize full single-file app with current stations & push index.html
+        appendGhLog(`Uploading standalone index.html (${allStations.length} stations baked in)...`, 'text-cyan-300');
+        const htmlContent = buildStandaloneHtmlStringWithBakedData();
+        const b64Content = utf8ToBase64(htmlContent);
+
+        const putBody = {
+          message: `Deploy GeoChain EV & Maps v7 (${allStations.length} stations)`,
+          content: b64Content,
+          branch: branch
+        };
+        if (existingSha) putBody.sha = existingSha;
+
+        const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/index.html`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(putBody)
+        });
+        if (!putRes.ok) {
+          const errTxt = await putRes.text();
+          throw new Error(`Failed pushing index.html: ${errTxt}`);
+        }
+        appendGhLog('✅ Pushed index.html to branch ' + branch, 'text-emerald-400');
+
+        // Step 5: Enable GitHub Pages on the branch
+        appendGhLog('Configuring GitHub Pages (`github.io`)...', 'text-cyan-300');
+        const pagesRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pages`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            source: { branch: branch, path: '/' }
+          })
+        });
+        if (pagesRes.status === 201 || pagesRes.status === 409 || pagesRes.ok) {
+          appendGhLog('✅ GitHub Pages enabled!', 'text-emerald-400');
+        } else {
+          appendGhLog('ℹ️ GitHub Pages status: ' + pagesRes.status + ' (may already be active).', 'text-amber-300');
+        }
+
+        const liveUrl = `https://${owner}.github.io/${repo}/`;
+        const repoUrl = `https://github.com/${owner}/${repo}`;
+
+        document.getElementById('gh-live-url').href = liveUrl;
+        document.getElementById('gh-live-url').textContent = liveUrl;
+        document.getElementById('gh-repo-url').href = repoUrl;
+        document.getElementById('gh-pages-open-btn').href = liveUrl;
+        document.getElementById('gh-live-qr').src =
+          `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(liveUrl)}`;
+
+        successBox.classList.remove('hidden');
+        showToast(`🎉 Deployed! Live at ${liveUrl}`);
+      } catch (err) {
+        appendGhLog(`❌ Error: ${err.message}`, 'text-rose-400');
+        showToast('GitHub Deploy Error — see log in modal.');
+      } finally {
+        runBtn.disabled = false;
+        runBtn.textContent = '🚀 Create Repo & Push to GitHub.io Now';
+      }
+    }
+
+    // 14. Maintained Categories Modal (New / Yet to Open & Blacklist)
+    function openCategoryModal(filterType = 'all') {
+      renderCategoryModal(filterType);
+      document.getElementById('cat-modal').classList.remove('hidden');
+      document.getElementById('cat-modal').classList.add('flex');
+    }
+
+    function closeCategoryModal() {
+      document.getElementById('cat-modal').classList.add('hidden');
+      document.getElementById('cat-modal').classList.remove('flex');
+    }
+
+    function renderCategoryModal(filterType = 'all') {
+      activeCatModalFilter = filterType;
+      ['all', 'new', 'blacklist'].forEach(t => {
+        const btn = document.getElementById('cat-tab-' + t);
+        if (!btn) return;
+        btn.className = (t === filterType)
+          ? 'px-3 py-1 rounded-lg bg-blue-600 text-white font-bold'
+          : 'px-3 py-1 rounded-lg bg-slate-800 text-slate-300 font-semibold';
+      });
+
+      const entries = Object.entries(categoryMap).filter(([, v]) => filterType === 'all' ? true : v.cat === filterType);
+      const box = document.getElementById('cat-modal-list');
+      if (entries.length === 0) {
+        box.innerHTML = `<div class="p-6 text-center text-slate-400 bg-slate-950 rounded-xl border border-slate-800">No stations currently hidden in this category.</div>`;
+        return;
+      }
+      box.innerHTML = entries.map(([k, v]) => `
+        <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
+          <div>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${v.cat === 'new' ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'}">
+              ${v.cat === 'new' ? '🚧 NEW / YET TO OPEN' : '🚫 BLACKLIST'}
+            </span>
+            <span class="font-bold text-white ml-1">${escapeHtml(v.name)}</span>
+            <div class="text-[11px] text-slate-400 mt-0.5">ID: ${escapeHtml(v.id)} • ${escapeHtml(v.city || '')} • <span class="font-mono text-emerald-300">${Number(v.lat).toFixed(6)}, ${Number(v.lng).toFixed(6)}</span></div>
+          </div>
+          <button type="button" onclick="restoreKey('${k.replace(/'/g, "\\'")}')" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shrink-0">
+            ♻️ Restore
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function restoreKey(k) {
+      delete categoryMap[k];
+      SafeStore.set(CAT_KEY, JSON.stringify(categoryMap));
+      recomputeAll(false);
+      renderCategoryModal(activeCatModalFilter);
+      showToast('Station restored to active map & chain!');
+    }
+
+    function restoreAllCategories() {
+      categoryMap = {};
+      SafeStore.set(CAT_KEY, JSON.stringify(categoryMap));
+      recomputeAll(false);
+      renderCategoryModal(activeCatModalFilter);
+      showToast('Restored all hidden stations!');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadSeedData(false);
+    });
+  </script>
+</body>
+</html>
